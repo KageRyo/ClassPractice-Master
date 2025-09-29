@@ -2,6 +2,11 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 import os
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Create results directory if it doesn't exist
 if not os.path.exists('results'):
@@ -11,17 +16,17 @@ if not os.path.exists('results'):
 image_names = ['Cameraman.bmp', 'Jetplane.bmp', 'Lake.bmp', 'Peppers.bmp']
 images = {}
 
-print("Loading test images...")
+logger.info("Loading test images...")
 for name in image_names:
     img_path = f'test_image/{name}'
     img = Image.open(img_path).convert('L')  # Convert to grayscale
     images[name] = np.array(img, dtype=np.float64)
-    print(f"Loaded {name}: {images[name].shape}")
+    logger.info(f"Loaded {name}: {images[name].shape}")
 
 # Process each image with three enhancement techniques
 for img_name in image_names:
     original_img = images[img_name]
-    print(f"\nProcessing {img_name}...")
+    logger.info(f"Processing {img_name}...")
     
     # Create figure for displaying results
     fig, axes = plt.subplots(2, 4, figsize=(16, 8))
@@ -33,7 +38,7 @@ for img_name in image_names:
     axes[0, 0].axis('off')
     
     # (1) Power-law (gamma) transformation
-    print("  Applying power-law transformation...")
+    logger.info("  Applying power-law transformation...")
     gamma = 2.2  # Gamma value for enhancement
     c = 1.0      # Scaling constant
     rows, cols = original_img.shape
@@ -64,7 +69,7 @@ for img_name in image_names:
     gamma_img.save(f'results/{img_name[:-4]}_gamma.bmp')
     
     # (2) Histogram equalization
-    print("  Applying histogram equalization...")
+    logger.info("  Applying histogram equalization...")
     
     # Calculate histogram manually
     histogram = [0] * 256  # Initialize histogram with zeros
@@ -112,7 +117,7 @@ for img_name in image_names:
     hist_eq_img.save(f'results/{img_name[:-4]}_hist_eq.bmp')
     
     # (3) Image sharpening using Laplacian operator
-    print("  Applying Laplacian sharpening...")
+    logger.info("  Applying Laplacian sharpening...")
     
     # Define Laplacian kernel (8-connected)
     laplacian_kernel = np.array([[-1, -1, -1],
@@ -220,10 +225,10 @@ for img_name in image_names:
     plt.savefig(f'results/{img_name[:-4]}_comparison.png', dpi=300, bbox_inches='tight')
     plt.show()
     
-    print(f"  Results saved for {img_name}")
+    logger.info(f"  Results saved for {img_name}")
 
-print("\nAll image processing completed!")
-print("Results saved in 'results/' directory")
-print("- Original and processed images displayed")
-print("- Histograms shown for all enhancement techniques")
-print("- All processed images saved as .bmp files")
+logger.info("All image processing completed!")
+logger.info("Results saved in 'results/' directory")
+logger.info("- Original and processed images displayed")
+logger.info("- Histograms shown for all enhancement techniques")
+logger.info("- All processed images saved as .bmp files")
