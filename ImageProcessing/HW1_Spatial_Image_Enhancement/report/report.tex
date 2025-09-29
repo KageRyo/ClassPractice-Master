@@ -1,19 +1,50 @@
-\documentclass{article}
+% !TEX program = xelatex
+% !TEX encoding = UTF-8
+% !BIB program = biber
+\documentclass[12pt,a4paper]{article}
+
+% 字體套件
+\usepackage{fontspec}
+\usepackage[BoldFont]{xeCJK}
+% 字體設定
+\setCJKmainfont{標楷體}   % Windows 11 下建議用「標楷體」
+\setmainfont{Times New Roman}
+% 中文自動換行
+\XeTeXlinebreaklocale "zh"
+\XeTeXlinebreakskip = 0pt plus 1pt
+
+\newcommand{\HomeworkTitle}{Image Processing Homework \#1: Spatial Image Enhancement}
+\newcommand{\StudentName}{Chien-Hsun Chang 張健勳}
+\newcommand{\StudentID}{614410073}
+\newcommand{\StudentInfo}{\StudentName~(\StudentID)}
+\newcommand{\DateDue}{Nov.\ 7, 2025}
+\newcommand{\DateHandedIn}{Sep.\ 28, 2025}
+
 \begin{document}
 
-\title{My First LaTeX Document}
-\author{Your Name}
-\date{\today}
-\maketitle
+\begin{titlepage}
+	\centering
+	{\vspace*{2cm}\Huge\bfseries \HomeworkTitle\par}
+	\vspace{2cm}
+    {\Large \StudentInfo\par}
+	\vfill
+	\begin{tabular}{ll}
+		Date Due: & {\DateDue} \\
+		Date Handed In: & {\DateHandedIn} \\
+	\end{tabular}
+	\vfill
+\end{titlepage}
 
-\section{Introduction}
-This is my first LaTeX document. It's amazing how easy it is to create professional-looking documents with LaTeX.
+\section{Technical Description}
+% TODO: add technical description content
 
-\section{Mathematics}
-LaTeX is particularly powerful for typesetting mathematical equations. For example, we can write the equation of a circle as:
-\[ x^2 + y^2 = r^2 \]
+\section{Experimental Results}
+% TODO: add experimental results content
 
-\section{Conclusion}
-In conclusion, LaTeX is a fantastic tool for creating documents with mathematical content.
+\section{Discussions}
+% TODO: add discussion content
+
+\section{References and Appendix}
+% TODO: add references & Appendix content
 
 \end{document}
