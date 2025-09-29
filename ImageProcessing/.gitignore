@@ -23,3 +23,8 @@ ENV/
 *.aux
 *.log
 *.synctex.gz
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.xdv

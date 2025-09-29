@@ -1,21 +1,39 @@
 % !TEX program = xelatex
 % !TEX encoding = UTF-8
-% !BIB program = biber
+% !BIB program = bibtex
 \documentclass[12pt,a4paper]{article}
 
-% 字體套件
+% --- 版面與中文字 ---
+\usepackage{geometry}
+\geometry{a4paper,margin=1in}
+
 \usepackage{fontspec}
 \usepackage[BoldFont]{xeCJK}
-
-% 字體設定
+% 統一中英文字體（可按需更換）
 \setCJKmainfont{標楷體}
 \setmainfont{Times New Roman}
 
-% 中文自動換行
+% 中文自動換行＋調整 CJK glue，減少不均勻間隙
 \XeTeXlinebreaklocale "zh"
 \XeTeXlinebreakskip = 0pt plus 1pt
+\xeCJKsetup{CJKglue=\hspace{0pt plus 0.08em minus 0.02em}}
 
-% 封面資訊設定
+% 段落樣式：縮排＋微小段前後距，避免空白忽大忽小
+\setlength{\parindent}{2em}
+\setlength{\parskip}{0.35em}
+\linespread{1.2}
+
+% 清單間距統一
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=2em}
+
+% 數學
+\usepackage{amsmath,amssymb}
+
+% --- 參考文獻格式 ---
+\usepackage{cite}
+
+% --- 封面資訊 ---
 \newcommand{\HomeworkTitle}{Image Processing Homework \#1: Spatial Image Enhancement}
 \newcommand{\StudentName}{Chien-Hsun Chang 張健勳}
 \newcommand{\StudentID}{614410073}
@@ -23,59 +41,91 @@
 \newcommand{\DateDue}{Nov.\ 7, 2025}
 \newcommand{\DateHandedIn}{Sep.\ 28, 2025}
 
+\raggedbottom
+\renewcommand{\thefootnote}{[\arabic{footnote}]}
 \begin{document}
 
-\begin{titlepage} % 封面
-	\centering
-	{\vspace*{2cm}\Huge\bfseries \HomeworkTitle\par}
-	\vspace{2cm}
-    {\Large \StudentInfo\par}
-	\vfill
-	\begin{tabular}{ll}
-		Date Due: & {\DateDue} \\
-		Date Handed In: & {\DateHandedIn} \\
-	\end{tabular}
-	\vfill
+% ---------------- 封面 ----------------
+\begin{titlepage}
+  \centering
+  {\vspace*{2cm}\Huge\bfseries \HomeworkTitle\par}
+  \vspace{2cm}
+  {\Large \StudentInfo\par}
+  \vfill
+  \begin{tabular}{@{}ll@{}}
+    Date Due: & \DateDue \\
+    Date Handed In: & \DateHandedIn \\
+  \end{tabular}
+  \vfill
 \end{titlepage}
 
-\section{Technical Description} % 技術說明
-　　本作業使用 Python 語言實作三種 Spatial Image Enhancement 的影像處理方法，分別為 (1.1)Power-Law (Gamma) Transformation、(1.2)Histogram Equalization 以及 (1.3)Image Sharpening Using the Laplacian Operator。以下將分別介紹這三種方法的原理與實作細節，並說明 (1.4)Implementation。
-\subsection{Power-Law (Gamma) Transformation} % 次冪(伽瑪)轉換
-　　Power-Law Transformation 是一種基於 Power-Law 公式的灰階影像增強方法，其原理為 Gamma Correction，透過調整影像的亮度與對比度來改善視覺效果。其數學表達式為：
-\[ s = c \cdot r^{\gamma} \]
-　　其中，\( s \) 為輸出像素值，\( r \) 為輸入像素值，\( c \) 為常數，而 \( \gamma \) 為調整參數。當 \( \gamma < 1 \) 時，影像會變得較亮；當 \( \gamma > 1 \) 時，影像會變得較暗。此方法適用於調整過曝或欠曝的圖片，在許多系統中（如相機、顯示器等）存在非線性響應（輸入與顯示亮度不是線性關係），gamma 修正就是一種方法，用 \( \gamma \) 來抵消這種非線性，使視覺輸出或顯示更接近線性感知。
-\subsection{Histogram Equalization} % 直方圖均化
-\subsection{Image Sharpening Using the Laplacian Operator} % 拉普拉斯算子影像銳化
-\subsection{Implementation} % 實作細節
-\subsubsection{Platform and Packages} % 平台與套件
-\subsubsection{Project Structure} % 專案結構
-\subsubsection{Parameter Settings} % 參數設定
-\subsubsection{Execution Flow} % 執行流程
-\subsubsection{Usage} % 使用說明
+% --------------- 內文 -----------------
+\section{Technical Description}
+本作業使用 Python 實作三種 Spatial Image Enhancement 方法：
+(1.1) Power-Law (Gamma) Transformation、
+(1.2) Histogram Equalization、
+(1.3) Image Sharpening Using the Laplacian Operator。
+以下分別介紹三者原理與實作細節，並於(1.4)說明 Implementation。
 
-\section{Experimental Results} % 實驗結果
+\subsection{Power-Law (Gamma) Transformation}
+Power-Law 變換是一種影像強度映射，其數學表達為
+\[
+s = c \cdot r^{\gamma},
+\]
+其中 \(r\) 為輸入像素強度（通常先正規化至 \([0,1]\)），\(s\) 為輸出強度，\(c\) 為縮放常數（常設為 1），\(\gamma\) 為控制參數。其映射特性如下：
+\begin{itemize}
+  \item \(\gamma < 1\)：輸出偏亮，暗部細節被拉伸；
+  \item \(\gamma > 1\)：輸出偏暗，亮部被壓縮；
+  \item \(\gamma = 1\)：變換為線性（若 \(c=1\) 則為恆等映射）。
+\end{itemize}
+
+Gonzalez 與 Woods 指出，Power-Law 變換常亦稱為 Gamma 變換，用於影像亮度與對比度調整；在實際影像系統中，Gamma 校正（Gamma Correction / Encoding / Decoding）以相同之 Power-Law 形式補償裝置的非線性響應，使輸入與顯示之亮度關係更合理 \cite{GonzalezWoods2018}。
+
+實作步驟範例：
+\begin{enumerate}
+  \item 正規化：\( r = r_{\text{orig}}/255 \)（8-bit 影像）；
+  \item 套用：\( s = c \cdot r^{\gamma} \)；
+  \item 反正規化：\( s_{\text{out}} = \mathrm{clip}(\mathrm{round}(255 \cdot s)) \)。
+\end{enumerate}
+
+\subsection{Histogram Equalization}
+（撰寫直方圖均化之理論與實作）
+
+\subsection{Image Sharpening Using the Laplacian Operator}
+（撰寫拉普拉斯算子銳化之理論與實作）
+
+\subsection{Implementation}
+\subsubsection{Platform and Packages}
+（Python／套件版本等）
+\subsubsection{Project Structure}
+（專案資料夾與檔案說明）
+\subsubsection{Parameter Settings}
+（各方法之參數）
+\subsubsection{Execution Flow}
+（執行流程圖或步驟）
+\subsubsection{Usage}
+（指令與使用說明）
+
+\section{Experimental Results}
 \subsection{Power-Law (Gamma) Transformation Results}
 \subsection{Histogram Equalization Results}
 \subsubsection{Histograms (before / after)}
 \subsection{Image Sharpening Results}
 \subsection{Per-Image Observations}
-\subsubsection{Cameraman}
-\subsubsection{Jetplane}
-\subsubsection{Lake}
-\subsubsection{Peppers}
+\subsubsection{Cameraman}\subsubsection{Jetplane}\subsubsection{Lake}\subsubsection{Peppers}
 
-\section{Discussions} % 討論
-\subsection{Comparison of Methods} % 方法效果比較
-\subsection{Method Analysis} % 方法分析
-\subsubsection{Advantages} % 優點
-\subsubsection{Disadvantages} % 缺點
-\subsubsection{Limitations} % 限制
-\subsubsection{Noise Amplification} % 雜訊放大
-\subsection{Parameter Sensitivity} % 參數敏感度
-\subsection{Possible Improvements} % 改進方向
+\section{Discussions}
+\subsection{Comparison of Methods}
+\subsection{Method Analysis}
+\subsubsection{Advantages}\subsubsection{Disadvantages}\subsubsection{Limitations}\subsubsection{Noise Amplification}
+\subsection{Parameter Sensitivity}
+\subsection{Possible Improvements}
 
-\section{References and Appendix} % 參考資料與附錄
-\subsection{References}
-\subsection{Appendix}
+\section{References}
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\section{Appendix}
+（如有附錄）
 
 \end{document}
