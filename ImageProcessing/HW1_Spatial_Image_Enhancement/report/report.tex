@@ -89,43 +89,200 @@ Gonzalez 與 Woods 指出，Power-Law 變換常亦稱為 Gamma 變換，用於�
 \end{enumerate}
 
 \subsection{Histogram Equalization}
-（撰寫直方圖均化之理論與實作）
+Histogram Equalization（直方圖均化）透過一個單調遞增的灰階映射，使輸出影像的灰階分佈更趨近均勻，以提升整體對比度，特別對原始影像灰階集中（過暗或過亮）時效果顯著。其核心概念為使用輸入影像的累積分佈函數（CDF, Cumulative Distribution Function）作為新的灰階映射。假設輸入離散灰階為 \(r_k\)，對應機率質量函數（PMF） \(p(r_k) = n_k/(MN)\)，其中 \(n_k\) 為灰階 \(r_k\) 出現次數，\(M,N\) 為影像尺寸。累積分佈函數為
+\[
+\mathrm{CDF}(r_k) = \sum_{j=0}^{k} p(r_j).
+\]
+映射函數（以 8-bit, \(L=256\) 為例）可寫成：
+\[
+s_k = T(r_k) = \mathrm{round}\left( \frac{\mathrm{CDF}(r_k)-\mathrm{CDF}_{\min}}{MN-\mathrm{CDF}_{\min}} (L-1) \right),
+\]
+其中 \(\mathrm{CDF}_{\min}\) 為第一個非零 CDF 值，用以避免影像中存在未使用灰階時造成對比壓縮。此即程式 `HistogramEqualizationProcessor.apply_histogram_equalization()` 中的公式：
+\begin{enumerate}[label=\alph*)]
+  \item 逐像素計算原始 256-bin histogram（以雙層 for-loop 實作，符合「不使用 OpenCV/PIL 現成增強」要求）。
+  \item 計算 CDF 與 \(\mathrm{CDF}_{\min}\)。
+  \item 依上述公式計算對應新灰階並截斷至 \([0,255]\)。
+\end{enumerate}
+特點：
+\begin{itemize}
+  \item 可提升整體動態範圍利用率，增強暗/亮區細節；
+  \item 局部對比（local contrast）未必充分提升，特別是影像不同區塊亮度差異極大時；
+  \item 易放大雜訊：在原本像素稀疏區域（低頻灰階）會進行拉伸；
+  \item 全域方法；若需避免過度增強，可改用 CLAHE（對比限制自適應直方圖均化）但本作業未實作。
+\end{itemize}
 
 \subsection{Image Sharpening Using the Laplacian Operator}
-（撰寫拉普拉斯算子銳化之理論與實作）
+Laplacian 為二階微分算子，衡量影像的二階變化，用於偵測快速灰階變化（邊緣）。連續形式：
+\[
+\nabla^2 f = \frac{\partial^2 f}{\partial x^2} + \frac{\partial^2 f}{\partial y^2}.
+\]
+離散 2D 中常見 4-鄰域近似：
+\[
+\nabla^2 f(x,y) \approx f(x+1,y)+f(x-1,y)+f(x,y+1)+f(x,y-1) - 4 f(x,y),
+\]
+或 8-鄰域加強對角方向：
+\[
+\nabla^2 f(x,y) \approx \sum_{(i,j)\in \mathcal{N}_8} f(x+i,y+j) - 8 f(x,y).
+\]
+本作業在 `LaplacianImageSharpener` 中提供兩種 kernel：
+\begin{itemize}
+  \item 8-connected: \(\begin{bmatrix}-1 & -1 & -1\\ -1 & 8 & -1\\ -1 & -1 & -1\end{bmatrix}\)
+  \item 4-connected: \(\begin{bmatrix}0 & -1 & 0\\ -1 & 4 & -1\\ 0 & -1 & 0\end{bmatrix}\)
+\end{itemize}
+為強調邊緣，採用「原圖加回（unsharp-like）」的策略：
+\[
+g(x,y) = f(x,y) + \nabla^2 f(x,y),
+\]
+對應程式 `apply_sharpening_filter()` 中 `enhanced_pixel_value = image + laplacian_filtered_result`，再截斷至 \([0,255]\)。此作法與傳統 unsharp masking（先平滑再加細節）不同，但同樣會增加邊緣對比。注意：
+\begin{itemize}
+  \item 高頻雜訊同時被放大；
+  \item 若需控制強度，可引入比例係數 \(\alpha\): \(g = f + \alpha \nabla^2 f\)；
+  \item 目前未做負值偏移（如常見的 \(f - c\nabla^2 f\) 形式），因 kernel 中中心為正值。
+\end{itemize}
 
 \subsection{Implementation}
 \subsubsection{Platform and Packages}
-（Python／套件版本等）
+使用 Python（本機假設 3.10+）與基礎科學繪圖套件：`numpy` 進行陣列處理、`Pillow` 進行影像讀寫（僅載入/儲存，不用其增強功能）、`matplotlib` 產生影像與直方圖視覺化。資料驗證結構（若後續擴充）使用 `pydantic`，執行檔打包採 `pyinstaller`（提供 `build_exe.bat` 與 `.spec`）。
+依 `requirements.txt`：numpy / pillow / matplotlib / pydantic / pytest / pyinstaller。
 \subsubsection{Project Structure}
-（專案資料夾與檔案說明）
+核心目錄（節錄）：
+\begin{itemize}
+  \item `main.py`：進入點，批次對四張測試影像執行三種增強並儲存結果。
+  \item `src/enhancement/`：三個演算法實作（power\_law, histogram\_equalization, laplacian）。皆使用雙層迴圈示範基礎原理，避免黑箱。
+  \item `src/pipeline/processing_pipeline.py`：封裝計算、視覺化、儲存流程；`process_single_image()` 形成可重用工作單元。
+  \item `src/ui/visualization.py`：產生 2×4 子圖：四張影像 + 四個 histogram，比較增強前後灰階分佈改變。
+  \item `src/utils/image_utils.py`：檔案載入、儲存、histogram 統計整合。
+  \item `test_image/`：提供四張 8-bit BMP 灰階測試影像（Cameraman, Jetplane, Lake, Peppers）。
+  \item `results/`：輸出：`*_gamma.bmp`、`*_hist_eq.bmp`、`*_sharpened.bmp` 及 `*_comparison.png`。
+\end{itemize}
 \subsubsection{Parameter Settings}
-（各方法之參數）
+\begin{itemize}
+  \item Gamma 變換：預設 \(\gamma = 2.2\)。可調整以測試 \(<1\) 提亮或 \(>1\) 壓暗；本程式集中設定於 `main.py` 的 `gamma_value` 變數。
+  \item Histogram Equalization：無額外超參數；採全域均化公式（引入 \(\mathrm{CDF}_{\min}\) 避免空洞灰階造成過度壓縮）。
+  \item Laplacian 銳化：預設 8-connected kernel；可改 `'4-connected'`。目前增強強度係數默認為 1（可擴充成可調 \(\alpha\)）。
+  \item 邊界處理：Laplacian 以「複製邊界像素」（clamped / replicate padding）方式處理索引越界。
+\end{itemize}
 \subsubsection{Execution Flow}
-（執行流程圖或步驟）
+主要流程（對每張影像）：
+\begin{enumerate}
+  \item 載入灰階影像至 `numpy.float64` 陣列（保留後續運算精度）。
+  \item 分別呼叫三個增強函式取得結果：`apply_power_law_transformation`、`apply_histogram_equalization_enhancement`、`apply_laplacian_image_sharpening`。
+  \item 視覺化：產生 8 子圖比較並儲存 PNG。
+  \item 輸出各增強結果為 BMP（利於無損灰階觀察）。
+  \item （可擴充）計算統計指標或客觀品質衡量。
+\end{enumerate}
+簡化偽碼：
+\begin{verbatim}
+for img in image_list:
+    f = load(img)
+    gamma_out = power_law(f, gamma)
+    hist_out  = hist_equalize(f)
+    lap_out   = laplacian_sharpen(f)
+    save(gamma_out, hist_out, lap_out)
+    visualize(f, gamma_out, hist_out, lap_out)
+\end{verbatim}
 \subsubsection{Usage}
-（指令與使用說明）
+以命令列執行：
+\begin{verbatim}
+python main.py
+\end{verbatim}
+若需變更 gamma，可直接編輯 `main.py` 中 `gamma_value`。打包（Windows）可使用 `pyinstaller` 與現有 `.spec` 或 `build_exe.bat`。
 
 \section{Experimental Results}
 \subsection{Power-Law (Gamma) Transformation Results}
+對四張圖（Cameraman, Jetplane, Lake, Peppers）以 \(\gamma=2.2\) 進行處理屬於「壓暗亮部」類型：
+\begin{itemize}
+  \item 暗部（原直方圖低灰階）變化幅度較小，亮部區域被壓縮，整體對比在高亮區域下降；
+  \item 若改用 \(\gamma < 1\) 則會顯著拉伸陰影區，對 Cameraman 的背景細節更有幫助；
+  \item 由於原影像多為中低對比，建議實務上測試 \(\gamma=0.5\sim0.9\) 以提升觀察舒適度。
+\end{itemize}
 \subsection{Histogram Equalization Results}
+全域均化後：
+\begin{itemize}
+  \item Cameraman：臉部與背景陰影細節被拉出，但背景噪點亦被放大；
+  \item Jetplane：雲層層次更分明，機翼邊緣更銳利；
+  \item Lake：水面反射與山脈層次提升，但天空可能出現輕微條帶（banding）；
+  \item Peppers：亮色椒面高光壓縮，暗部紋理釋放，整體飽和度主觀感下降（灰階亮度分佈更平均）。
+\end{itemize}
 \subsubsection{Histograms (before / after)}
+視覺化顯示：原始 histogram 可能集中於窄範圍；均化後分佈趨於填滿 0--255，峰值降低、寬度增加。Peppers 具多峰（不同椒段反射），均化後各峰被攤平，提升全域對比但降低某些區域的局部動態層次感。
 \subsection{Image Sharpening Results}
+Laplacian 銳化後：
+\begin{itemize}
+  \item 邊緣（高梯度區）亮度提升（或暗邊更暗），視覺上更清晰；
+  \item 細微噪聲顆粒亦被強調，特別在 Cameraman 暗背景及 Lake 的水面紋理；
+  \item 8-connected kernel 比 4-connected 更強，可能導致 halo 或邊緣過衝（overshoot）；
+  \item 若觀察到反白邊，可考慮改用 \(g = f - \alpha \nabla^2 f\) 或加入抑制係數。
+\end{itemize}
 \subsection{Per-Image Observations}
-\subsubsection{Cameraman}\subsubsection{Jetplane}\subsubsection{Lake}\subsubsection{Peppers}
+\subsubsection{Cameraman} 中低亮度佔多；Gamma=2.2 使臉部暗沉；Histogram Equalization 拉出臉部紋理與背景雜訊；Laplacian 讓帽邊與肩部更清晰但噪聲增加。
+\subsubsection{Jetplane} 原本高亮天空與機體對比適中；Gamma=2.2 壓亮天空使機體對比相對上升；Histogram Equalization 使雲層層次豐富；Laplacian 強化機翼輪廓線。
+\subsubsection{Lake} 原圖灰階較平均；Gamma 壓亮區後整體略偏暗；Histogram Equalization 提升山體/水面分界；Laplacian 對樹線與山稜線強化明顯。
+\subsubsection{Peppers} 反光與陰影差異大；Gamma=2.2 壓抑高光保留陰影；Histogram Equalization 放大暗部紋理但可能失去柔順漸層；Laplacian 使邊緣輪廓更利、表面顆粒感上升。
 
 \section{Discussions}
 \subsection{Comparison of Methods}
+三方法分屬不同層面：Power-Law 為強度再映射（非線性曲線），Histogram Equalization 為全域統計再分佈，Laplacian 為空間二階微分濾波（強調高頻）。彼此可串接：例如先 Gamma 校正調整亮度，再均化，最後銳化。順序影響結果（先銳化後均化可能放大噪聲再被重新分佈）。
 \subsection{Method Analysis}
-\subsubsection{Advantages}\subsubsection{Disadvantages}\subsubsection{Limitations}\subsubsection{Noise Amplification}
+\subsubsection{Advantages}
+\begin{itemize}
+  \item Power-Law：簡單、可連續調整亮暗偏好；適合補償顯示裝置 Gamma。
+  \item Histogram Equalization：自動化、不需手動設定門檻；顯著擴展動態範圍使用率。
+  \item Laplacian 銳化：計算量低（3×3 kernel），邊緣強化直接。
+\end{itemize}
+\subsubsection{Disadvantages}
+\begin{itemize}
+  \item Power-Law：單一參數對不同區域同時作用，無區域自適應能力。
+  \item Histogram Equalization：可能過度增強背景噪聲；影像主觀自然度下降。
+  \item Laplacian：對噪聲敏感；易產生 overshoot 或 halo。
+\end{itemize}
+\subsubsection{Limitations}
+未實作：CLAHE、雙邊濾波結合銳化、可調銳化強度 \(\alpha\)、噪聲先行抑制（如 Gaussian smoothing）等。Power-Law 目前僅支援灰階 8-bit。
+\subsubsection{Noise Amplification}
+Histogram Equalization 與 Laplacian 均會放大高頻成分。建議改進：
+\begin{itemize}
+  \item 先以小 sigma Gaussian 平滑；
+  \item Laplacian 使用抑制係數或加權融合：\(g = f + \alpha \nabla^2 f\), \(0<\alpha<1\)；
+  \item 對均化後影像再行輕度降噪（如 median）以抑制被攤平後的孤立噪點。
+\end{itemize}
 \subsection{Parameter Sensitivity}
+\begin{itemize}
+  \item Gamma：對低灰階拉伸靈敏，建議 log 掃描（例如 0.4,0.6,0.8,1.0,1.4,2.2）並以對比度或熵為指標選最優。
+  \item Laplacian Kernel：8-connected 會比 4-connected 更強烈；可動態依據影像雜訊估計選擇。
+  \item 直方圖均化：無內參，但可評估是否需改用 CLAHE（區塊大小、對比限制 clip limit）。
+\end{itemize}
 \subsection{Possible Improvements}
+\begin{itemize}
+  \item 增加 CLAHE 與可調銳化係數介面。
+  \item 引入客觀指標（對比度提升率、熵、Tenengrad focus measure 等）。
+  \item 管線化與參數化（CLI 參數或 config 檔）。
+  \item 增加單元測試：驗證 histogram equalization 映射是否為單調遞增、Laplacian 結果是否總和近零等性質。
+  \item 向量化加速：以 `numpy` broadcasting 取代巢狀迴圈（仍可保留教學版本）。
+\end{itemize}
 
 \section{References}
 \bibliographystyle{IEEEtran}
 \bibliography{refs}
 
 \section{Appendix}
-（如有附錄）
+\subsection*{A. 主要演算法時間複雜度（理論）}
+假設影像尺寸 \(M\times N\)：
+\begin{itemize}
+  \item Power-Law：一次掃描 \(O(MN)\)。
+  \item Histogram Equalization：建 histogram + CDF + 映射，共 \(O(MN + L)\)，其中 \(L=256\) 固定。
+  \item Laplacian：每像素 3×3 kernel \(9\) 次乘加，仍為 \(O(MN)\)。
+\end{itemize}
+向量化可將 Python 迴圈成本降至 C 實作底層（`numpy`），實際加速倍數視記憶體配置而定。
+
+\subsection*{B. 潛在自動評估指標}
+可計算處理前後：全域對比（標準差）、Shannon entropy、邊緣強度（Sobel 能量）、峰值信噪比（若有 ground truth）。
+
+\subsection*{C. 再現性}
+全部程式僅依賴 `requirements.txt` 中套件。於 Windows PowerShell：
+\begin{verbatim}
+pip install -r requirements.txt
+python main.py
+\end{verbatim}
+即可在 `results/` 取得輸出。
 
 \end{document}
