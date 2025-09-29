@@ -25,7 +25,7 @@ def main():
         gamma_value = 2.2  # Centralized gamma setting
         image_file_loader = ImageFileLoader(base_directory_path='test_image')
         enhancement_visualizer = ImageEnhancementVisualizer()
-        image_names = ['Cameraman.bmp', 'Jetplane.bmp', 'Lake.bmp', 'Peppers.bmp']
+        image_names = ['Cameraman.bmp', 'Jetplane.bmp', 'Lake.bmp', 'Peppers.bmp']  # Download from eCourse2 at 2025-09-28
         logger.info("Loading test images...")
         loaded_images_dictionary = image_file_loader.load_multiple_image_files(image_names)
 
