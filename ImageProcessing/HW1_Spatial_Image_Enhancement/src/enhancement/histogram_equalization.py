@@ -13,16 +13,16 @@ class HistogramEqualizationProcessor:
     def calculate_image_histogram_distribution(self, image):
         """Return 256-bin intensity histogram for a grayscale uint8 image."""
         rows, cols = image.shape
-        histogram = [0] * 256
+        pixel_intensity_histogram = [0] * 256
         for i in range(rows):
             for j in range(cols):
                 pixel_value = int(image[i, j])
-                histogram[pixel_value] += 1
+                pixel_intensity_histogram[pixel_value] += 1
         logger.debug("Histogram calculation completed")
-        return histogram
+        return pixel_intensity_histogram
 
     def calculate_cumulative_distribution_function(self, histogram_distribution):
-        """Return cumulative distribution and its first non-zero value (cdf_min)."""
+        """Return cumulative distribution and its first non-zero value (minimum_cdf_value)."""
         cumulative_distribution_function = [0] * 256
         cumulative_distribution_function[0] = histogram_distribution[0]
         for k in range(1, 256):

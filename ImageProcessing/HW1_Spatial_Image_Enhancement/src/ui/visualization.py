@@ -12,17 +12,17 @@ class ImageEnhancementVisualizer:
         self.figure_size_dimensions = figure_size_dimensions
         self.image_resolution_dpi = image_resolution_dpi
         self.histogram_calculator = ImageHistogramCalculator()
-        logger.info(f"ImageEnhancementVisualizer initialized with figure_size={figure_size_dimensions}, dpi={image_resolution_dpi}")
+        logger.info(f"ImageEnhancementVisualizer initialized with figure_size_dimensions={figure_size_dimensions}, image_resolution_dpi={image_resolution_dpi}")
 
     def display_complete_enhancement_results(self, image_filename, original_image_array,
                                              power_law_transformed_result, histogram_equalized_result,
-                                             laplacian_sharpened_result, gamma_transformation_value=2.2,
+                                             laplacian_sharpened_result, gamma_value=2.2,
                                              figure_save_path=None, display_plot_immediately=True):
         """Display four processed images and their histograms in a 2x4 grid."""
         matplotlib_figure, subplot_axes = plt.subplots(2, 4, figsize=self.figure_size_dimensions)
         matplotlib_figure.suptitle(f'Image Enhancement Results - {image_filename}', fontsize=16)
         self._display_single_image_on_axes(subplot_axes[0, 0], original_image_array, 'Original Image')
-        self._display_single_image_on_axes(subplot_axes[0, 1], power_law_transformed_result, f'Power-law (γ={gamma_transformation_value})')
+        self._display_single_image_on_axes(subplot_axes[0, 1], power_law_transformed_result, f'Power-law (γ={gamma_value})')
         self._display_single_image_on_axes(subplot_axes[0, 2], histogram_equalized_result, 'Histogram Equalization')
         self._display_single_image_on_axes(subplot_axes[0, 3], laplacian_sharpened_result, 'Laplacian Sharpening')
 

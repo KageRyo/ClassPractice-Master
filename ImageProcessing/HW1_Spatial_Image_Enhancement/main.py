@@ -33,7 +33,7 @@ def main():
             process_single_image(
                 image_filename=image_filename,
                 image_array=loaded_images_dictionary[image_filename],
-                gamma=gamma_value,
+                gamma_value=gamma_value,
                 logger=logger,
                 visualizer=enhancement_visualizer,
                 loader=image_file_loader
