@@ -1,0 +1,9 @@
+# For Calculations
+numpy
+
+# For Image Processing
+pillow
+matplotlib
+
+# For Building Executable (Windows .exe)
+pyinstaller
