@@ -18,3 +18,8 @@ build/
 venv/
 env/
 ENV/
+
+# LaTex Report's auxiliary files
+*.aux
+*.log
+*.synctex.gz
