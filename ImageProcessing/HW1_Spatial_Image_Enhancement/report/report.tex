@@ -6,13 +6,16 @@
 % 字體套件
 \usepackage{fontspec}
 \usepackage[BoldFont]{xeCJK}
+
 % 字體設定
-\setCJKmainfont{標楷體}   % Windows 11 下建議用「標楷體」
+\setCJKmainfont{標楷體}
 \setmainfont{Times New Roman}
+
 % 中文自動換行
 \XeTeXlinebreaklocale "zh"
 \XeTeXlinebreakskip = 0pt plus 1pt
 
+% 封面資訊設定
 \newcommand{\HomeworkTitle}{Image Processing Homework \#1: Spatial Image Enhancement}
 \newcommand{\StudentName}{Chien-Hsun Chang 張健勳}
 \newcommand{\StudentID}{614410073}
@@ -22,7 +25,7 @@
 
 \begin{document}
 
-\begin{titlepage}
+\begin{titlepage} % 封面
 	\centering
 	{\vspace*{2cm}\Huge\bfseries \HomeworkTitle\par}
 	\vspace{2cm}
@@ -35,16 +38,12 @@
 	\vfill
 \end{titlepage}
 
-\section{Technical Description}
-% TODO: add technical description content
+\section{Technical Description} % 技術說明
 
-\section{Experimental Results}
-% TODO: add experimental results content
+\section{Experimental Results} % 實驗結果
 
-\section{Discussions}
-% TODO: add discussion content
+\section{Discussions} % 討論
 
-\section{References and Appendix}
-% TODO: add references & Appendix content
+\section{References and Appendix} % 參考資料與附錄
 
 \end{document}
