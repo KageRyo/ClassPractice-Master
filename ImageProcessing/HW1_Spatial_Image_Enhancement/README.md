@@ -8,8 +8,8 @@
 
 ## 執行環境與相依套件
 
-- **作業系統**：Windows 10 以上（助教端不需額外安裝第三方軟體即可執行）
-- **Python**：建議使用 Python 3.9～3.12
+- **作業系統**：Windows 10 以上
+- **Python**：使用 Python 3.13
 - **必要套件**（已列於 `requirements.txt`）
 	- `numpy`
 	- `pillow`
