@@ -67,6 +67,31 @@
 3. 查看結果：
    執行完成後，處理過的影像和比較圖會儲存在 `results` 資料夾中，並會自動顯示。
 
+## 打包應用程式
+
+本專案可以打包成獨立的可執行檔案（不需要安裝 Python 即可執行）。打包方法如下：
+
+1. 安裝打包工具 PyInstaller：
+   ```
+   pip install pyinstaller
+   ```
+
+2. 使用提供的 bat 檔進行打包：
+   ```
+   .\build_exe.bat
+   ```
+   或直接執行打包命令：
+   ```
+   pyinstaller --onefile --add-data "test_image;test_image" --name HW1_Image_Enhancement main.py
+   ```
+
+3. 打包完成後，可執行檔將位於 `dist` 目錄中：
+   ```
+   .\dist\HW1_Image_Enhancement.exe
+   ```
+
+打包的可執行檔已包含所有必要的依賴和測試影像，可以在任何 Windows 電腦上執行，無需安裝 Python 或其他套件。執行結果同樣會儲存在程式執行目錄下的 `results` 資料夾中。
+
 ## 演算法說明
 
 ### 1. Histogram Equalization (直方圖均衡化)
