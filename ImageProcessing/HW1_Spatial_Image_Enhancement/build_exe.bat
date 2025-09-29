@@ -1,3 +1,3 @@
 @echo off
-pyinstaller --onefile --noconsole --name HW1_Image_Enhancement main.py
+pyinstaller --onefile --add-data "test_image;test_image" --name HW1_Image_Enhancement main.py
 pause
