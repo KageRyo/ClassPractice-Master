@@ -1,0 +1,17 @@
+# Core Dependencies for Image Processing
+numpy
+pillow
+matplotlib
+
+# Data Validation and Schema
+pydantic
+
+# Testing Framework
+pytest
+
+# Development and Testing Dependencies (optional)
+pytest-cov  # Coverage reporting
+pytest-mock  # Enhanced mocking capabilities
+
+# For Building Executable (Windows .exe)
+pyinstaller

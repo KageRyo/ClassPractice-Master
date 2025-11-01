@@ -1,0 +1,29 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# For build exe files
+dist/
+build/
+
+# Results directory
+*/results/
+
+# VS Code settings
+.vscode/
+
+# Environment directories
+venv/
+env/
+ENV/
+
+# LaTex Report's auxiliary files
+*.aux
+*.log
+*.synctex.gz
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.xdv
