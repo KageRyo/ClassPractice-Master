@@ -52,7 +52,13 @@ def main():
         
         image_file_loader = ImageFileLoader(base_directory_path=test_image_path)
         enhancement_visualizer = ImageEnhancementVisualizer()
-        image_names = ['Cameraman.bmp', 'Jetplane.bmp', 'Lake.bmp', 'Peppers.bmp']  # Download from eCourse2 at 2025-09-28
+
+        image_names = image_file_loader.list_available_images()
+        if not image_names:
+            raise FileNotFoundError(
+                "No supported test images found. Add files with extensions bmp/png/jpg/jpeg/tif/tiff to `test_image/`."
+            )
+
         logger.info("Loading test images...")
         loaded_images_dictionary = image_file_loader.load_multiple_image_files(image_names)
 

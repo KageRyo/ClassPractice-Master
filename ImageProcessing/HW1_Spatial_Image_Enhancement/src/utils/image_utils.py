@@ -8,10 +8,31 @@ logger = logging.getLogger(__name__)
 class ImageFileLoader:
     """Utility for loading and saving grayscale images from a base directory."""
 
+    SUPPORTED_EXTENSIONS = ('.bmp', '.png', '.jpg', '.jpeg', '.tif', '.tiff')
+
     def __init__(self, base_directory_path='test_image'):
         """Store base directory path containing image assets."""
         self.base_directory_path = base_directory_path
         logger.info(f"ImageFileLoader initialized with base_directory_path='{base_directory_path}'")
+
+    def list_available_images(self):
+        """Return sorted list of available image filenames in the base directory."""
+        if not os.path.isdir(self.base_directory_path):
+            raise FileNotFoundError(f"Image directory not found: {self.base_directory_path}")
+
+        filenames = []
+        for entry in os.listdir(self.base_directory_path):
+            complete_path = os.path.join(self.base_directory_path, entry)
+            _, ext = os.path.splitext(entry)
+            if os.path.isfile(complete_path) and ext.lower() in self.SUPPORTED_EXTENSIONS:
+                filenames.append(entry)
+
+        if not filenames:
+            logger.warning(f"No supported image files found in {self.base_directory_path}")
+
+        filenames.sort()
+        logger.info(f"Discovered {len(filenames)} image file(s) for processing")
+        return filenames
 
     def load_single_image_file(self, image_filename, convert_to_grayscale=True):
         """Return image as float64 ndarray; convert to grayscale if requested."""
