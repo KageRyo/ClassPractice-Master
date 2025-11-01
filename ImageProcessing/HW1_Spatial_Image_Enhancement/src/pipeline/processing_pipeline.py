@@ -68,8 +68,8 @@ def process_single_image(image_filename: str,
                          loader: ImageFileLoader,
                          visualize: bool = True,
                          save: bool = True) -> EnhancementResultsSchema:
-    """Full processing pipeline for one image (compute -> visualize -> save).
-
+    """
+    Full processing pipeline for one image (compute -> visualize -> save).
     Returns the validated enhancement results (useful for tests).
     """
     logger.info(f"Processing {image_filename}...")

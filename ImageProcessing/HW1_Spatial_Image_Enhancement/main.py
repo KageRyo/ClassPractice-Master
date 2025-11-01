@@ -1,10 +1,10 @@
-# Made By Chien-Hsun Chang (614410073) at 2025-09-29
+# Made By Chien-Hsun Chang (614410073) at 2025-11-01
 # Course: Image Processing at CCU
 # Assignment: Homework 1 - Spatial Image Enhancement
 
 import sys
 import os
-import numpy as np
+import threading
 
 # Add better resource path handling for PyInstaller
 def get_resource_path(relative_path):
@@ -24,7 +24,8 @@ else:
 from src.utils.logging_config import setup_logging, get_logger
 from src.utils.image_utils import ImageFileLoader
 from src.ui.visualization import ImageEnhancementVisualizer
-from src.pipeline.processing_pipeline import process_single_image
+from src.ui.gui import ImageReviewApp
+from src.pipeline.processing_pipeline import process_single_image, visualize_results
 
 
 def main():
@@ -51,35 +52,74 @@ def main():
                 break
         
         image_file_loader = ImageFileLoader(base_directory_path=test_image_path)
-        enhancement_visualizer = ImageEnhancementVisualizer()
-
         image_names = image_file_loader.list_available_images()
         if not image_names:
             raise FileNotFoundError(
                 "No supported test images found. Add files with extensions bmp/png/jpg/jpeg/tif/tiff to `test_image/`."
             )
 
-        logger.info("Loading test images...")
-        loaded_images_dictionary = image_file_loader.load_multiple_image_files(image_names)
+        app = ImageReviewApp(processed_items=None, gamma_value=gamma_value)
 
-        for image_filename in image_names:
-            process_single_image(
-                image_filename=image_filename,
-                image_array=loaded_images_dictionary[image_filename],
-                gamma_value=gamma_value,
-                logger=logger,
-                visualizer=enhancement_visualizer,
-                loader=image_file_loader
-            )
+        processing_error = threading.Event()
 
-        logger.info("=" * 60)
-        logger.info("All image processing completed successfully!")
-        logger.info("Results saved in 'results/' directory:")
-        logger.info("- Original and processed images displayed")
-        logger.info("- Histograms shown for all enhancement techniques")
-        logger.info("- All processed images saved as .bmp files")
-        logger.info("- Comparison figures saved as .png files")
-        logger.info("=" * 60)
+        def processing_worker():
+            try:
+                app.schedule_processing_message("Loading test images...")
+                logger.info("Loading test images...")
+                enhancement_visualizer = ImageEnhancementVisualizer()
+                loaded_images_dictionary = image_file_loader.load_multiple_image_files(image_names)
+
+                processed_items = []
+                total_images = len(image_names)
+
+                for index, image_filename in enumerate(image_names, start=1):
+                    app.schedule_processing_message(f"Processing {index}/{total_images}: {image_filename}")
+                    original_image = loaded_images_dictionary[image_filename]
+                    results = process_single_image(
+                        image_filename=image_filename,
+                        image_array=original_image,
+                        gamma_value=gamma_value,
+                        logger=logger,
+                        visualizer=enhancement_visualizer,
+                        loader=image_file_loader,
+                        visualize=False
+                    )
+
+                    figure_path = visualize_results(
+                        image_filename=image_filename,
+                        original_image=original_image,
+                        results=results,
+                        visualizer=enhancement_visualizer,
+                        gamma_value=gamma_value,
+                        display_plot_immediately=False
+                    )
+                    logger.info(f"Saved comparison figure to {figure_path}")
+                    processed_items.append((image_filename, original_image, results))
+
+                logger.info("=" * 60)
+                logger.info("All image processing completed successfully!")
+                logger.info("Results saved in 'results/' directory:")
+                logger.info("- Processed images ready for interactive review")
+                logger.info("- Histograms generated for all enhancement techniques")
+                logger.info("- All processed images saved as .bmp files")
+                logger.info("- Comparison figures saved as .png files")
+                logger.info("=" * 60)
+
+                app.schedule_processed_items(processed_items)
+                app.schedule_processing_message("Processing complete")
+
+            except Exception as worker_exception:  # pragma: no cover - background worker
+                processing_error.set()
+                logger.error(f"Error occurred during processing: {worker_exception}")
+                logger.error("Program terminated with errors.")
+                app.schedule_error(str(worker_exception))
+
+        threading.Thread(target=processing_worker, daemon=True).start()
+
+        app.run()
+
+        if processing_error.is_set():
+            sys.exit(1)
 
     except Exception as e:
         logger.error(f"Error occurred during processing: {e}")
