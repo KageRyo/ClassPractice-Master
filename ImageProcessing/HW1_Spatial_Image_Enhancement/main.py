@@ -27,7 +27,11 @@ from src.utils.logging_config import setup_logging, get_logger
 from src.utils.image_utils import ImageFileLoader
 from src.ui.visualization import ImageEnhancementVisualizer
 from src.ui.gui import ImageReviewApp, ProcessedItem
-from src.pipeline.processing_pipeline import process_single_image, visualize_results, save_histogram_figures
+from src.pipeline.processing_pipeline import (
+    process_single_image,
+    visualize_results,
+    save_histogram_figures,
+)
 
 
 def main():
@@ -118,12 +122,14 @@ def main():
                         original_image=original_image,
                         results=results
                     )
-                    logger.info("Saved histogram figures to %s", os.path.dirname(next(iter(histogram_paths.values()))))
+                    if histogram_paths:
+                        first_hist_path = next(iter(histogram_paths.values()))
+                        logger.info("Saved histogram figures to %s", os.path.dirname(first_hist_path) or '.')
+                    else:
+                        logger.warning("No histogram figures generated for %s", image_filename)
                     processed_items.append(ProcessedItem(
                         filename=image_filename,
-                        original_image=original_image,
-                        results=results,
-                        histogram_paths=histogram_paths
+                        comparison_figure_path=figure_path
                     ))
 
                 logger.info("=" * 60)
