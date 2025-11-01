@@ -4,41 +4,32 @@ from tkinter import messagebox, ttk
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-import numpy as np
 from PIL import Image, ImageTk
-
-from src.schemas.enhancement_results_schema import EnhancementResultsSchema
 
 
 @dataclass
 class ProcessedItem:
     filename: str
-    original_image: np.ndarray
-    results: EnhancementResultsSchema
-    histogram_paths: Dict[str, str]
+    comparison_figure_path: Optional[str]
 
 
 class ImageReviewApp:
-    """Tkinter GUI for browsing processed enhancement results."""
+    """Tkinter GUI for browsing processed enhancement comparison figures."""
 
     def __init__(self, processed_items: Optional[List[ProcessedItem]], gamma_value: float):
         self.processed_items = list(processed_items or [])
         self.gamma_value = gamma_value
         self.current_index = 0
-        self.variant_keys = ["original", "power_law", "hist_eq", "laplacian"]
-        self.display_titles = [
-            "Original",
-            "Power-law",
-            "Histogram Equalization",
-            "Laplacian",
-        ]
-        self.current_image_photos: List[ImageTk.PhotoImage] = []
-        self.hist_photo_cache: Dict[str, ImageTk.PhotoImage] = {}
-        self.current_hist_photos: List[ImageTk.PhotoImage] = []
+
+        self.comparison_cache: Dict[str, Image.Image] = {}
+        self.comparison_photo: Optional[ImageTk.PhotoImage] = None
+        self.comparison_source_path: Optional[str] = None
+        self._comparison_after_id: Optional[str] = None
 
         self.root = tk.Tk()
-        self.root.title("Image Enhancement Review")
-        self.root.geometry("1280x940")
+        self.root.title("614410073 - Image Processing HW1")
+        self.root.geometry("1100x820")
+        self.root.minsize(860, 600)
 
         self._build_layout()
         if self.processed_items:
@@ -47,7 +38,7 @@ class ImageReviewApp:
             self.set_processing_message("Processing complete")
         else:
             self._set_controls_enabled(False)
-            self._clear_slots()
+            self._clear_display()
             self.set_processing_message("Processing images...")
 
     def _build_layout(self):
@@ -81,30 +72,14 @@ class ImageReviewApp:
 
         ttk.Label(control_frame, textvariable=self.image_status_var).pack(side=tk.RIGHT)
 
-        content_frame = ttk.Frame(self.root, padding=12)
-        content_frame.pack(fill=tk.BOTH, expand=True)
-        for column_index in range(4):
-            content_frame.columnconfigure(column_index, weight=1)
-        content_frame.rowconfigure(0, weight=3)
-        content_frame.rowconfigure(1, weight=2)
+        comparison_container = ttk.Frame(self.root, padding=12)
+        comparison_container.pack(fill=tk.BOTH, expand=True)
+        comparison_container.rowconfigure(0, weight=1)
+        comparison_container.columnconfigure(0, weight=1)
 
-        self.image_slots: List[tk.Label] = []
-        self.hist_slots: List[tk.Label] = []
-
-        for index, title in enumerate(self.display_titles):
-            image_container = ttk.Frame(content_frame, padding=6)
-            image_container.grid(row=0, column=index, sticky="nsew")
-            ttk.Label(image_container, text=title, font=("Segoe UI", 12, "bold")).pack(anchor=tk.N)
-            image_label = tk.Label(image_container, borderwidth=1, relief=tk.SOLID, background="#1f1f1f")
-            image_label.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
-            self.image_slots.append(image_label)
-
-            hist_container = ttk.Frame(content_frame, padding=6)
-            hist_container.grid(row=1, column=index, sticky="nsew")
-            ttk.Label(hist_container, text=f"{title} Histogram", font=("Segoe UI", 11)).pack(anchor=tk.N)
-            hist_label = tk.Label(hist_container, borderwidth=1, relief=tk.SOLID, background="#ffffff")
-            hist_label.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
-            self.hist_slots.append(hist_label)
+        self.comparison_label = tk.Label(comparison_container, borderwidth=0, background="#ffffff")
+        self.comparison_label.grid(row=0, column=0, sticky="nsew")
+        self.comparison_label.bind("<Configure>", self._on_comparison_resize)
 
         details_frame = ttk.Frame(self.root, padding=(12, 0, 12, 6))
         details_frame.pack(fill=tk.X)
@@ -134,16 +109,18 @@ class ImageReviewApp:
         combo_state = "readonly" if enabled else "disabled"
         self.selection_combo.configure(state=combo_state)
 
-    def _clear_slots(self):
-        for slot in self.image_slots + self.hist_slots:
-            slot.configure(image="", text="Processing...", compound=tk.CENTER)
-            slot.image = None  # type: ignore[attr-defined]
-        self.current_image_photos = []
-        self.current_hist_photos = []
+    def _clear_display(self):
+        self.comparison_label.configure(image="", text="Processing...", compound=tk.CENTER)
+        self.comparison_label.image = None  # type: ignore[attr-defined]
+        self.comparison_photo = None
+        self.comparison_source_path = None
+        if self._comparison_after_id:
+            self.root.after_cancel(self._comparison_after_id)
+            self._comparison_after_id = None
         self.image_status_var.set("")
         self.detail_var.set("Processing images... Please wait.")
 
-    def _on_combo_selected(self, event):  # pragma: no cover - GUI callback
+    def _on_combo_selected(self, _event):  # pragma: no cover - GUI callback
         if not self.processed_items:
             return
         selected_name = self.selection_var.get()
@@ -153,61 +130,103 @@ class ImageReviewApp:
                 self._update_display()
                 break
 
-    def _array_to_photo(self, array: np.ndarray) -> ImageTk.PhotoImage:
-        arr = np.clip(array, 0, 255).astype(np.uint8)
-        image = Image.fromarray(arr)
-        if image.mode != "L":
-            image = image.convert("L")
+    def _get_comparison_base_image(self, path: Optional[str]) -> Optional[Image.Image]:
+        if not path or not os.path.exists(path):
+            return None
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            mtime = None
+        cache_key = f"{path}:{mtime}" if mtime is not None else path
 
-        max_dimension = 360
-        if max(image.size) > max_dimension:
-            image.thumbnail((max_dimension, max_dimension), Image.LANCZOS)
+        cached_image = self.comparison_cache.get(cache_key)
+        if cached_image is not None:
+            return cached_image
 
-        return ImageTk.PhotoImage(image)
+        with Image.open(path) as source_image:
+            base_image = source_image.convert("RGB")
 
-    def _load_hist_photo(self, path: str) -> ImageTk.PhotoImage:
-        if path in self.hist_photo_cache:
-            return self.hist_photo_cache[path]
-        image = Image.open(path)
-        photo = ImageTk.PhotoImage(image)
-        image.close()
-        self.hist_photo_cache[path] = photo
-        return photo
+        stale_keys = [key for key in self.comparison_cache if key.startswith(path)]
+        for key in stale_keys:
+            self.comparison_cache.pop(key, None)
+        self.comparison_cache[cache_key] = base_image
+        return base_image
+
+    def _render_comparison_image(self):
+        if self._comparison_after_id:
+            try:
+                self.root.after_cancel(self._comparison_after_id)
+            except tk.TclError:
+                pass
+            self._comparison_after_id = None
+
+        if not self.comparison_source_path:
+            return
+
+        label = self.comparison_label
+        width = label.winfo_width()
+        height = label.winfo_height()
+        if width <= 1 or height <= 1:
+            self._comparison_after_id = self.root.after(60, self._render_comparison_image)
+            return
+
+        base_image = self._get_comparison_base_image(self.comparison_source_path)
+        if base_image is None or base_image.width == 0 or base_image.height == 0:
+            label.configure(image="", text="Comparison figure unavailable", compound=tk.CENTER)
+            label.image = None  # type: ignore[attr-defined]
+            self.comparison_photo = None
+            self.comparison_source_path = None
+            return
+
+        available_width = max(width - 24, 1)
+        available_height = max(height - 24, 1)
+        scale = min(available_width / base_image.width, available_height / base_image.height, 1.0)
+        target_width = max(1, int(base_image.width * scale))
+        target_height = max(1, int(base_image.height * scale))
+
+        if scale < 1.0:
+            rendered = base_image.resize((target_width, target_height), Image.LANCZOS)
+        else:
+            rendered = base_image
+
+        photo = ImageTk.PhotoImage(rendered)
+        label.configure(image=photo, text="", compound=tk.NONE)
+        label.image = photo  # type: ignore[attr-defined]
+        self.comparison_photo = photo
+
+    def _on_comparison_resize(self, _event):  # pragma: no cover - GUI callback
+        if not self.comparison_source_path:
+            return
+        if self._comparison_after_id:
+            try:
+                self.root.after_cancel(self._comparison_after_id)
+            except tk.TclError:
+                pass
+        self._comparison_after_id = self.root.after(40, self._render_comparison_image)
 
     def _update_display(self):  # pragma: no cover - GUI side effect
         if not self.processed_items:
             return
 
         item = self.processed_items[self.current_index]
-        arrays = [
-            item.original_image,
-            item.results.power_law,
-            item.results.hist_eq,
-            item.results.laplacian,
-        ]
+        if self._comparison_after_id:
+            try:
+                self.root.after_cancel(self._comparison_after_id)
+            except tk.TclError:
+                pass
+            self._comparison_after_id = None
 
-        self.current_image_photos = []
-        for slot, array in zip(self.image_slots, arrays):
-            photo = self._array_to_photo(array)
-            slot.configure(image=photo, text="", compound=tk.NONE)
-            slot.image = photo  # type: ignore[attr-defined]
-            self.current_image_photos.append(photo)
-
-        self.current_hist_photos = []
-        for slot, key in zip(self.hist_slots, self.variant_keys):
-            path = item.histogram_paths.get(key)
-            if path and os.path.exists(path):
-                try:
-                    photo = self._load_hist_photo(path)
-                    slot.configure(image=photo, text="", compound=tk.NONE)
-                    slot.image = photo  # type: ignore[attr-defined]
-                    self.current_hist_photos.append(photo)
-                except Exception:
-                    slot.configure(image="", text="Histogram unavailable", compound=tk.CENTER)
-                    slot.image = None  # type: ignore[attr-defined]
-            else:
-                slot.configure(image="", text="Histogram unavailable", compound=tk.CENTER)
-                slot.image = None  # type: ignore[attr-defined]
+        if item.comparison_figure_path and os.path.exists(item.comparison_figure_path):
+            self.comparison_source_path = item.comparison_figure_path
+            self.comparison_photo = None
+            self.comparison_label.configure(image="", text="Loading...", compound=tk.CENTER)
+            self.comparison_label.image = None  # type: ignore[attr-defined]
+            self._render_comparison_image()
+        else:
+            self.comparison_source_path = None
+            self.comparison_photo = None
+            self.comparison_label.configure(image="", text="Comparison figure unavailable", compound=tk.CENTER)
+            self.comparison_label.image = None  # type: ignore[attr-defined]
 
         self.selection_var.set(item.filename)
         self.image_status_var.set(f"Image {self.current_index + 1} of {len(self.processed_items)}")
@@ -224,9 +243,10 @@ class ImageReviewApp:
         if not self.processed_items:
             self._set_controls_enabled(False)
             self.selection_combo.configure(values=[])
-            self._clear_slots()
+            self._clear_display()
             return
 
+        self.comparison_cache.clear()
         self.selection_combo.configure(values=[item.filename for item in self.processed_items])
         self.current_index = 0
         self._set_controls_enabled(True)

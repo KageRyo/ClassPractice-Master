@@ -4,7 +4,6 @@ from typing import Dict
 
 import numpy as np
 from matplotlib import pyplot as plt
-
 from src.schemas.enhancement_results_schema import EnhancementResultsSchema
 from src.enhancement.power_law import apply_power_law_transformation
 from src.enhancement.histogram_equalization import apply_histogram_equalization_enhancement
@@ -66,12 +65,11 @@ def save_results(image_filename: str, results: EnhancementResultsSchema, loader:
 def save_histogram_figures(image_filename: str,
                            original_image: np.ndarray,
                            results: EnhancementResultsSchema,
-                           output_root: str = 'results/histograms') -> Dict[str, str]:
+                           output_root: str = 'results') -> Dict[str, str]:
     """Generate histogram plots for each variant and save to disk."""
     calculator = ImageHistogramCalculator()
     base_name = os.path.splitext(image_filename)[0]
-    target_dir = os.path.join(output_root, base_name)
-    os.makedirs(target_dir, exist_ok=True)
+    os.makedirs(output_root, exist_ok=True)
 
     variant_settings = [
         ('original', original_image, '#4c72b0'),
@@ -83,20 +81,24 @@ def save_histogram_figures(image_filename: str,
     saved_paths: Dict[str, str] = {}
     for key, image_array, color in variant_settings:
         histogram = calculator.calculate_image_pixel_histogram(image_array)
-        figure, axis = plt.subplots(figsize=(4, 2.2), dpi=120)
-        axis.bar(range(256), histogram, color=color, alpha=0.85)
-        axis.set_xlim(0, 255)
+        figure, axis = plt.subplots(figsize=(5.0, 3.0), dpi=120)
+        axis.bar(range(256), histogram, color=color, alpha=0.85, width=1.0, align='edge')
+        axis.set_xlim(-0.5, 255.5)
+        max_count = max(histogram) if histogram else 0
+        if max_count > 0:
+            axis.set_ylim(0, max_count * 1.05)
         axis.set_xlabel('Intensity', fontsize=8)
         axis.set_ylabel('Frequency', fontsize=8)
         axis.set_title(f'{key.replace("_", " ").title()} Histogram', fontsize=9)
         axis.tick_params(labelsize=8)
         figure.tight_layout()
-        output_path = os.path.join(target_dir, f'{key}_hist.png')
-        figure.savefig(output_path, bbox_inches='tight')
+        output_path = os.path.join(output_root, f'{base_name}_{key}_hist.png')
+        figure.savefig(output_path, bbox_inches='tight', pad_inches=0.1)
         plt.close(figure)
         saved_paths[key] = output_path
 
     return saved_paths
+
 
 
 def process_single_image(image_filename: str,
