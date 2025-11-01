@@ -15,6 +15,3 @@ pytest-mock  # Enhanced mocking capabilities
 
 # For Building Executable (Windows .exe)
 pyinstaller
-
-# For Unit Testing
-pytest

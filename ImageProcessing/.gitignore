@@ -6,7 +6,6 @@ __pycache__/
 # For build exe files
 dist/
 build/
-*.spec
 
 # Results directory
 */results/
