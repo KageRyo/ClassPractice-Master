@@ -1,3 +1,19 @@
 @echo off
-pyinstaller --onefile --add-data "test_image;test_image" --name HW1_Image_Enhancement main.py
+setlocal
+cd /d "%~dp0"
+
+where python >nul 2>&1
+if errorlevel 1 (
+	echo Python executable not found in PATH.
+	exit /b 1
+)
+
+python -m PyInstaller --clean --noconfirm HW1_Image_Enhancement.spec
+if errorlevel 1 (
+	echo PyInstaller build failed.
+	exit /b %errorlevel%
+)
+
+echo Build succeeded. Executable available in dist\HW1_Image_Enhancement.exe
+endlocal
 pause

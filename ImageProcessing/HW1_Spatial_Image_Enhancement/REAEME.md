@@ -52,7 +52,7 @@
 
 1. 安裝依賴：
    ```
-   pip install -r requirements.txt
+   python -m pip install -r requirements.txt
    ```
 
 2. 執行程式：
@@ -67,26 +67,30 @@
 
 本專案可以打包成獨立的可執行檔案（不需要安裝 Python 即可執行）。打包方法如下：
 
-1. 安裝打包工具 PyInstaller：
+1. 建議在乾淨環境（例如 `python -m venv venv` 後啟用的虛擬環境）安裝依賴，可減少成品體積並縮短啟動時間：
    ```
-   pip install pyinstaller
+   python -m pip install -r requirements.txt
    ```
 
 2. 使用提供的 bat 檔進行打包：
    ```
    .\build_exe.bat
    ```
-   或直接執行打包命令：
+   這個腳本會呼叫 `python -m PyInstaller --clean --noconfirm HW1_Image_Enhancement.spec`，同時掛載自訂 hooks 與所需的 TkAgg 後端資源。
+
+3. 若想手動打包，可直接執行：
    ```
-   pyinstaller --onefile --add-data "test_image;test_image" --name HW1_Image_Enhancement main.py
+   python -m PyInstaller --clean --noconfirm HW1_Image_Enhancement.spec
    ```
 
-3. 打包完成後，可執行檔將位於 `dist` 目錄中：
+4. 打包完成後，可執行檔將位於 `dist` 目錄中：
    ```
    .\dist\HW1_Image_Enhancement.exe
    ```
 
 打包的可執行檔已包含所有必要的依賴和測試影像，可以在任何 Windows 電腦上執行，無需安裝 Python 或其他套件。執行結果同樣會儲存在程式執行目錄下的 `results` 資料夾中。
+
+> ⚠️ 注意：因為可執行檔是單檔壓縮格式，首次啟動時會先展開所需模組，體積愈小啟動愈快。使用虛擬環境或 `onedir` 模式都可以進一步縮短啟動時間。
 
 ## 演算法說明
 
