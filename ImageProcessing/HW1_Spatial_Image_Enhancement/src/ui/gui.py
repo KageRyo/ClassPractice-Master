@@ -1,18 +1,21 @@
-import io
+import os
 import tkinter as tk
 from tkinter import messagebox, ttk
-from typing import List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
 import numpy as np
 from PIL import Image, ImageTk
-from matplotlib import pyplot as plt
-from matplotlib.backends.backend_agg import FigureCanvasAgg
-from matplotlib.figure import Figure
 
 from src.schemas.enhancement_results_schema import EnhancementResultsSchema
-from src.utils.image_utils import ImageHistogramCalculator
 
-ProcessedItem = Tuple[str, np.ndarray, EnhancementResultsSchema]
+
+@dataclass
+class ProcessedItem:
+    filename: str
+    original_image: np.ndarray
+    results: EnhancementResultsSchema
+    histogram_paths: Dict[str, str]
 
 
 class ImageReviewApp:
@@ -22,18 +25,20 @@ class ImageReviewApp:
         self.processed_items = list(processed_items or [])
         self.gamma_value = gamma_value
         self.current_index = 0
+        self.variant_keys = ["original", "power_law", "hist_eq", "laplacian"]
         self.display_titles = [
             "Original",
             "Power-law",
             "Histogram Equalization",
             "Laplacian",
         ]
-        self.photo_cache: dict[str, list[ImageTk.PhotoImage]] = {"images": [], "hist": []}
-        self.histogram_calculator = ImageHistogramCalculator()
+        self.current_image_photos: List[ImageTk.PhotoImage] = []
+        self.hist_photo_cache: Dict[str, ImageTk.PhotoImage] = {}
+        self.current_hist_photos: List[ImageTk.PhotoImage] = []
 
         self.root = tk.Tk()
         self.root.title("Image Enhancement Review")
-        self.root.geometry("1280x900")
+        self.root.geometry("1280x940")
 
         self._build_layout()
         if self.processed_items:
@@ -83,8 +88,8 @@ class ImageReviewApp:
         content_frame.rowconfigure(0, weight=3)
         content_frame.rowconfigure(1, weight=2)
 
-        self.image_slots: list[tk.Label] = []
-        self.hist_slots: list[tk.Label] = []
+        self.image_slots: List[tk.Label] = []
+        self.hist_slots: List[tk.Label] = []
 
         for index, title in enumerate(self.display_titles):
             image_container = ttk.Frame(content_frame, padding=6)
@@ -97,13 +102,30 @@ class ImageReviewApp:
             hist_container = ttk.Frame(content_frame, padding=6)
             hist_container.grid(row=1, column=index, sticky="nsew")
             ttk.Label(hist_container, text=f"{title} Histogram", font=("Segoe UI", 11)).pack(anchor=tk.N)
-            hist_label = tk.Label(hist_container, borderwidth=1, relief=tk.SOLID, background="white")
+            hist_label = tk.Label(hist_container, borderwidth=1, relief=tk.SOLID, background="#ffffff")
             hist_label.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
             self.hist_slots.append(hist_label)
 
-        details_frame = ttk.Frame(self.root, padding=(12, 0, 12, 12))
+        details_frame = ttk.Frame(self.root, padding=(12, 0, 12, 6))
         details_frame.pack(fill=tk.X)
         ttk.Label(details_frame, textvariable=self.detail_var).pack(anchor=tk.W)
+
+        log_frame = ttk.LabelFrame(self.root, text="Logs", padding=(12, 8))
+        log_frame.pack(fill=tk.BOTH, expand=False, padx=12, pady=(0, 12))
+        self.log_text = tk.Text(
+            log_frame,
+            height=8,
+            state=tk.DISABLED,
+            wrap=tk.NONE,
+            font=("Consolas", 10),
+            background="#101010",
+            foreground="#eaeaea",
+            insertbackground="#eaeaea",
+        )
+        log_scrollbar = ttk.Scrollbar(log_frame, command=self.log_text.yview)
+        self.log_text.configure(yscrollcommand=log_scrollbar.set)
+        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        log_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
     def _set_controls_enabled(self, enabled: bool):
         state = tk.NORMAL if enabled else tk.DISABLED
@@ -116,7 +138,8 @@ class ImageReviewApp:
         for slot in self.image_slots + self.hist_slots:
             slot.configure(image="", text="Processing...", compound=tk.CENTER)
             slot.image = None  # type: ignore[attr-defined]
-        self.photo_cache = {"images": [], "hist": []}
+        self.current_image_photos = []
+        self.current_hist_photos = []
         self.image_status_var.set("")
         self.detail_var.set("Processing images... Please wait.")
 
@@ -124,8 +147,8 @@ class ImageReviewApp:
         if not self.processed_items:
             return
         selected_name = self.selection_var.get()
-        for idx, (name, _, _) in enumerate(self.processed_items):
-            if name == selected_name:
+        for idx, item in enumerate(self.processed_items):
+            if item.filename == selected_name:
                 self.current_index = idx
                 self._update_display()
                 break
@@ -142,60 +165,59 @@ class ImageReviewApp:
 
         return ImageTk.PhotoImage(image)
 
-    def _hist_to_photo(self, array: np.ndarray, title: str) -> ImageTk.PhotoImage:
-        histogram = self.histogram_calculator.calculate_image_pixel_histogram(array)
-        figure = Figure(figsize=(3.0, 2.2), dpi=100)
-        axis = figure.add_subplot(111)
-        axis.bar(range(256), histogram, color="#4c72b0", alpha=0.85)
-        axis.set_xlim(0, 255)
-        axis.set_title(f"{title} Histogram", fontsize=9)
-        axis.set_xlabel("Intensity", fontsize=8)
-        axis.set_ylabel("Frequency", fontsize=8)
-        axis.tick_params(labelsize=8)
-        figure.tight_layout()
-
-        canvas = FigureCanvasAgg(figure)
-        canvas.draw()
-        buffer = io.BytesIO()
-        figure.savefig(buffer, format="png", bbox_inches="tight")
-        plt.close(figure)
-        buffer.seek(0)
-        image = Image.open(buffer)
-        rgb_image = image.convert("RGB")
-        photo = ImageTk.PhotoImage(rgb_image)
-        rgb_image.close()
+    def _load_hist_photo(self, path: str) -> ImageTk.PhotoImage:
+        if path in self.hist_photo_cache:
+            return self.hist_photo_cache[path]
+        image = Image.open(path)
+        photo = ImageTk.PhotoImage(image)
         image.close()
-        buffer.close()
+        self.hist_photo_cache[path] = photo
         return photo
 
     def _update_display(self):  # pragma: no cover - GUI side effect
         if not self.processed_items:
             return
 
-        self.photo_cache = {"images": [], "hist": []}
-        name, original_image, results = self.processed_items[self.current_index]
+        item = self.processed_items[self.current_index]
         arrays = [
-            original_image,
-            results.power_law,
-            results.hist_eq,
-            results.laplacian,
+            item.original_image,
+            item.results.power_law,
+            item.results.hist_eq,
+            item.results.laplacian,
         ]
 
+        self.current_image_photos = []
         for slot, array in zip(self.image_slots, arrays):
             photo = self._array_to_photo(array)
             slot.configure(image=photo, text="", compound=tk.NONE)
             slot.image = photo  # type: ignore[attr-defined]
-            self.photo_cache["images"].append(photo)
+            self.current_image_photos.append(photo)
 
-        for slot, array, title in zip(self.hist_slots, arrays, self.display_titles):
-            photo = self._hist_to_photo(array, title)
-            slot.configure(image=photo, text="", compound=tk.NONE)
-            slot.image = photo  # type: ignore[attr-defined]
-            self.photo_cache["hist"].append(photo)
+        self.current_hist_photos = []
+        for slot, key in zip(self.hist_slots, self.variant_keys):
+            path = item.histogram_paths.get(key)
+            if path and os.path.exists(path):
+                try:
+                    photo = self._load_hist_photo(path)
+                    slot.configure(image=photo, text="", compound=tk.NONE)
+                    slot.image = photo  # type: ignore[attr-defined]
+                    self.current_hist_photos.append(photo)
+                except Exception:
+                    slot.configure(image="", text="Histogram unavailable", compound=tk.CENTER)
+                    slot.image = None  # type: ignore[attr-defined]
+            else:
+                slot.configure(image="", text="Histogram unavailable", compound=tk.CENTER)
+                slot.image = None  # type: ignore[attr-defined]
 
-        self.selection_var.set(name)
+        self.selection_var.set(item.filename)
         self.image_status_var.set(f"Image {self.current_index + 1} of {len(self.processed_items)}")
-        self.detail_var.set(f"Gamma: {self.gamma_value}    File: {name}")
+        self.detail_var.set(f"Gamma: {self.gamma_value}    File: {item.filename}")
+
+    def append_log_message(self, message: str):
+        self.log_text.configure(state=tk.NORMAL)
+        self.log_text.insert(tk.END, message + "\n")
+        self.log_text.see(tk.END)
+        self.log_text.configure(state=tk.DISABLED)
 
     def update_processed_items(self, processed_items: List[ProcessedItem]):
         self.processed_items = list(processed_items)
@@ -205,7 +227,7 @@ class ImageReviewApp:
             self._clear_slots()
             return
 
-        self.selection_combo.configure(values=[item[0] for item in self.processed_items])
+        self.selection_combo.configure(values=[item.filename for item in self.processed_items])
         self.current_index = 0
         self._set_controls_enabled(True)
         self._update_display()
@@ -221,6 +243,12 @@ class ImageReviewApp:
 
     def schedule_error(self, message: str):
         self.root.after(0, lambda: self.show_error(message))
+
+    def schedule_log_message(self, message: str):
+        try:
+            self.root.after(0, lambda: self.append_log_message(message))
+        except tk.TclError:
+            pass
 
     def show_next(self):  # pragma: no cover - GUI callback
         if not self.processed_items:

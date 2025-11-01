@@ -1,13 +1,16 @@
 import os
 import logging
+from typing import Dict
+
 import numpy as np
+from matplotlib import pyplot as plt
 
 from src.schemas.enhancement_results_schema import EnhancementResultsSchema
 from src.enhancement.power_law import apply_power_law_transformation
 from src.enhancement.histogram_equalization import apply_histogram_equalization_enhancement
 from src.enhancement.laplacian import apply_laplacian_image_sharpening
 from src.ui.visualization import ImageEnhancementVisualizer
-from src.utils.image_utils import ImageFileLoader
+from src.utils.image_utils import ImageFileLoader, ImageHistogramCalculator
 
 
 def compute_enhancements(image_array: np.ndarray, gamma_value: float, logger: logging.Logger) -> EnhancementResultsSchema:
@@ -58,6 +61,42 @@ def save_results(image_filename: str, results: EnhancementResultsSchema, loader:
     loader.save_image_array_to_file(results.power_law, f'{base_name}_gamma.bmp')
     loader.save_image_array_to_file(results.hist_eq, f'{base_name}_hist_eq.bmp')
     loader.save_image_array_to_file(results.laplacian, f'{base_name}_sharpened.bmp')
+
+
+def save_histogram_figures(image_filename: str,
+                           original_image: np.ndarray,
+                           results: EnhancementResultsSchema,
+                           output_root: str = 'results/histograms') -> Dict[str, str]:
+    """Generate histogram plots for each variant and save to disk."""
+    calculator = ImageHistogramCalculator()
+    base_name = os.path.splitext(image_filename)[0]
+    target_dir = os.path.join(output_root, base_name)
+    os.makedirs(target_dir, exist_ok=True)
+
+    variant_settings = [
+        ('original', original_image, '#4c72b0'),
+        ('power_law', results.power_law, '#55a868'),
+        ('hist_eq', results.hist_eq, '#c44e52'),
+        ('laplacian', results.laplacian, '#8172b3'),
+    ]
+
+    saved_paths: Dict[str, str] = {}
+    for key, image_array, color in variant_settings:
+        histogram = calculator.calculate_image_pixel_histogram(image_array)
+        figure, axis = plt.subplots(figsize=(4, 2.2), dpi=120)
+        axis.bar(range(256), histogram, color=color, alpha=0.85)
+        axis.set_xlim(0, 255)
+        axis.set_xlabel('Intensity', fontsize=8)
+        axis.set_ylabel('Frequency', fontsize=8)
+        axis.set_title(f'{key.replace("_", " ").title()} Histogram', fontsize=9)
+        axis.tick_params(labelsize=8)
+        figure.tight_layout()
+        output_path = os.path.join(target_dir, f'{key}_hist.png')
+        figure.savefig(output_path, bbox_inches='tight')
+        plt.close(figure)
+        saved_paths[key] = output_path
+
+    return saved_paths
 
 
 def process_single_image(image_filename: str,
