@@ -5,6 +5,8 @@
 import sys
 import os
 import threading
+import logging
+from typing import List
 
 # Add better resource path handling for PyInstaller
 def get_resource_path(relative_path):
@@ -24,8 +26,8 @@ else:
 from src.utils.logging_config import setup_logging, get_logger
 from src.utils.image_utils import ImageFileLoader
 from src.ui.visualization import ImageEnhancementVisualizer
-from src.ui.gui import ImageReviewApp
-from src.pipeline.processing_pipeline import process_single_image, visualize_results
+from src.ui.gui import ImageReviewApp, ProcessedItem
+from src.pipeline.processing_pipeline import process_single_image, visualize_results, save_histogram_figures
 
 
 def main():
@@ -60,6 +62,23 @@ def main():
 
         app = ImageReviewApp(processed_items=None, gamma_value=gamma_value)
 
+        class TkinterLogHandler(logging.Handler):
+            def __init__(self, gui_app: ImageReviewApp):
+                super().__init__()
+                self.gui_app = gui_app
+
+            def emit(self, record: logging.LogRecord):
+                try:
+                    message = self.format(record)
+                    self.gui_app.schedule_log_message(message)
+                except Exception:
+                    self.handleError(record)
+
+        gui_handler = TkinterLogHandler(app)
+        gui_handler.setLevel(logging.INFO)
+        gui_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', '%Y-%m-%d %H:%M:%S'))
+        logging.getLogger().addHandler(gui_handler)
+
         processing_error = threading.Event()
 
         def processing_worker():
@@ -69,7 +88,7 @@ def main():
                 enhancement_visualizer = ImageEnhancementVisualizer()
                 loaded_images_dictionary = image_file_loader.load_multiple_image_files(image_names)
 
-                processed_items = []
+                processed_items: List[ProcessedItem] = []
                 total_images = len(image_names)
 
                 for index, image_filename in enumerate(image_names, start=1):
@@ -94,7 +113,18 @@ def main():
                         display_plot_immediately=False
                     )
                     logger.info(f"Saved comparison figure to {figure_path}")
-                    processed_items.append((image_filename, original_image, results))
+                    histogram_paths = save_histogram_figures(
+                        image_filename=image_filename,
+                        original_image=original_image,
+                        results=results
+                    )
+                    logger.info("Saved histogram figures to %s", os.path.dirname(next(iter(histogram_paths.values()))))
+                    processed_items.append(ProcessedItem(
+                        filename=image_filename,
+                        original_image=original_image,
+                        results=results,
+                        histogram_paths=histogram_paths
+                    ))
 
                 logger.info("=" * 60)
                 logger.info("All image processing completed successfully!")
@@ -117,6 +147,9 @@ def main():
         threading.Thread(target=processing_worker, daemon=True).start()
 
         app.run()
+
+        logging.getLogger().removeHandler(gui_handler)
+        gui_handler.close()
 
         if processing_error.is_set():
             sys.exit(1)
