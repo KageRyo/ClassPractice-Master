@@ -15,18 +15,18 @@ from src.utils.image_utils import ImageFileLoader, ImageHistogramCalculator
 def compute_enhancements(image_array: np.ndarray, gamma_value: float, logger: logging.Logger) -> EnhancementResultsSchema:
     """Run all enhancement operations for a single image and return validated results."""
     logger.info(f"  Applying power-law transformation (gamma={gamma_value:.3f})...")
-    power_law_arr = apply_power_law_transformation(image_array, gamma_value=gamma_value)
+    power_law_image = apply_power_law_transformation(image_array, gamma_value=gamma_value)
 
     logger.info("  Applying histogram equalization...")
-    hist_eq_arr = apply_histogram_equalization_enhancement(image_array)
+    histogram_equalized_image = apply_histogram_equalization_enhancement(image_array)
 
     logger.info("  Applying Laplacian sharpening...")
-    laplacian_arr = apply_laplacian_image_sharpening(image_array)
+    laplacian_image = apply_laplacian_image_sharpening(image_array)
 
     return EnhancementResultsSchema(
-        power_law=power_law_arr,
-        hist_eq=hist_eq_arr,
-        laplacian=laplacian_arr
+        power_law=power_law_image,
+        hist_eq=histogram_equalized_image,
+        laplacian=laplacian_image
     )
 
 
