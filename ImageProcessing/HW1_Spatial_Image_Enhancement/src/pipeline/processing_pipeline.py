@@ -1,11 +1,11 @@
 import os
 import logging
-from typing import Dict
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 from matplotlib import pyplot as plt
 from src.schemas.enhancement_results_schema import EnhancementResultsSchema
-from src.enhancement.power_law import apply_power_law_transformation
+from src.enhancement.power_law import apply_power_law_transformation, estimate_gamma_for_brightness
 from src.enhancement.histogram_equalization import apply_histogram_equalization_enhancement
 from src.enhancement.laplacian import apply_laplacian_image_sharpening
 from src.ui.visualization import ImageEnhancementVisualizer
@@ -14,7 +14,7 @@ from src.utils.image_utils import ImageFileLoader, ImageHistogramCalculator
 
 def compute_enhancements(image_array: np.ndarray, gamma_value: float, logger: logging.Logger) -> EnhancementResultsSchema:
     """Run all enhancement operations for a single image and return validated results."""
-    logger.info("  Applying power-law transformation...")
+    logger.info(f"  Applying power-law transformation (gamma={gamma_value:.3f})...")
     power_law_arr = apply_power_law_transformation(image_array, gamma_value=gamma_value)
 
     logger.info("  Applying histogram equalization...")
@@ -103,22 +103,54 @@ def save_histogram_figures(image_filename: str,
 
 def process_single_image(image_filename: str,
                          image_array: np.ndarray,
-                         gamma_value: float,
+                         gamma_value: Optional[float],
                          logger: logging.Logger,
                          visualizer: ImageEnhancementVisualizer,
                          loader: ImageFileLoader,
                          visualize: bool = True,
-                         save: bool = True) -> EnhancementResultsSchema:
+                         save: bool = True,
+                         auto_gamma_bounds: Tuple[float, float] = (0.35, 2.0),
+                         target_mean_intensity: float = 0.6) -> Tuple[EnhancementResultsSchema, float]:
     """
     Full processing pipeline for one image (compute -> visualize -> save).
     Returns the validated enhancement results (useful for tests).
     """
     logger.info(f"Processing {image_filename}...")
-    results = compute_enhancements(image_array, gamma_value, logger)
+    lower_bound, upper_bound = auto_gamma_bounds if auto_gamma_bounds[0] <= auto_gamma_bounds[1] else (auto_gamma_bounds[1], auto_gamma_bounds[0])
+
+    resolved_gamma = gamma_value
+    if resolved_gamma is None:
+        resolved_gamma = estimate_gamma_for_brightness(
+            image_array,
+            target_mean=target_mean_intensity,
+            min_gamma=lower_bound,
+            max_gamma=upper_bound,
+        )
+        logger.info(
+            "  Auto-selected gamma %.3f to target mean %.2f",
+            resolved_gamma,
+            target_mean_intensity,
+        )
+    else:
+        if resolved_gamma < lower_bound or resolved_gamma > upper_bound:
+            clamped_gamma = float(np.clip(resolved_gamma, lower_bound, upper_bound))
+            logger.warning(
+                "  Clamping provided gamma %.3f to %.3f (bounds %.2f-%.2f)",
+                resolved_gamma,
+                clamped_gamma,
+                lower_bound,
+                upper_bound,
+            )
+            resolved_gamma = clamped_gamma
+        else:
+            resolved_gamma = float(resolved_gamma)
+        logger.info("  Using provided gamma %.3f", resolved_gamma)
+
+    results = compute_enhancements(image_array, resolved_gamma, logger)
     if visualize:
         logger.info("  Displaying and saving results...")
-        visualize_results(image_filename, image_array, results, visualizer, gamma_value, display_plot_immediately=True)
+        visualize_results(image_filename, image_array, results, visualizer, resolved_gamma, display_plot_immediately=True)
     if save:
         save_results(image_filename, results, loader)
     logger.info(f"  Processing completed for {image_filename}")
-    return results
+    return results, resolved_gamma

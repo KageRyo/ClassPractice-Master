@@ -18,8 +18,10 @@ Author: Chien-Hsun Chang (614410073)
 Course: Image Processing at CCU
 Assignment: Homework 1 - Spatial Image Enhancement
 """
-import numpy as np
 import logging
+import math
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -102,3 +104,44 @@ def apply_power_law_transformation(image, gamma_value=2.2, scaling_constant=1.0)
     """
     transformer = PowerLawTransformer(gamma_value, scaling_constant)
     return transformer.transform(image)
+
+
+def estimate_gamma_for_brightness(
+    image,
+    target_mean=0.6,
+    min_gamma=0.35,
+    max_gamma=2.5,
+):
+    """Estimate a gamma value that nudges the image mean toward ``target_mean``.
+
+    Args:
+        image (np.ndarray): Input grayscale image (0-255 range expected).
+        target_mean (float): Desired mean intensity after normalization (0-1).
+        min_gamma (float): Lower bound for the returned gamma value.
+        max_gamma (float): Upper bound for the returned gamma value.
+
+    Returns:
+        float: Gamma value clamped to ``[min_gamma, max_gamma]``.
+
+    Notes:
+        Uses a coarse approximation based on normalized mean intensity. The
+        returned gamma brightens dark images (gamma < 1) while keeping overly
+        aggressive corrections in check via the provided bounds.
+    """
+    normalized_image = np.asarray(image, dtype=np.float64) / 255.0
+    normalized_image = np.clip(normalized_image, 1e-6, 1.0)
+
+    mean_intensity = float(normalized_image.mean())
+    if not math.isfinite(mean_intensity) or mean_intensity <= 1e-6:
+        return float(min_gamma)
+
+    sanitized_target = float(np.clip(target_mean, 1e-3, 0.95))
+    mean_intensity = float(np.clip(mean_intensity, 1e-3, 0.95))
+
+    try:
+        estimated_gamma = math.log(sanitized_target) / math.log(mean_intensity)
+    except ValueError:
+        estimated_gamma = min_gamma
+
+    bounded_gamma = float(np.clip(estimated_gamma, min_gamma, max_gamma))
+    return bounded_gamma

@@ -22,7 +22,7 @@ class ImageEnhancementVisualizer:
         matplotlib_figure, subplot_axes = plt.subplots(2, 4, figsize=self.figure_size_dimensions)
         matplotlib_figure.suptitle(f'Image Enhancement Results - {image_filename}', fontsize=16)
         self._display_single_image_on_axes(subplot_axes[0, 0], original_image_array, 'Original Image')
-        self._display_single_image_on_axes(subplot_axes[0, 1], power_law_transformed_result, f'Power-law (γ={gamma_value})')
+        self._display_single_image_on_axes(subplot_axes[0, 1], power_law_transformed_result, f'Power-law (γ={gamma_value:.3f})')
         self._display_single_image_on_axes(subplot_axes[0, 2], histogram_equalized_result, 'Histogram Equalization')
         self._display_single_image_on_axes(subplot_axes[0, 3], laplacian_sharpened_result, 'Laplacian Sharpening')
 
