@@ -9,10 +9,10 @@ class LaplacianImageSharpener:
     def __init__(self, laplacian_kernel_type='8-connected'):
         """Select Laplacian kernel type: '8-connected' (default) or '4-connected'."""
         self.laplacian_kernel_type = laplacian_kernel_type
-        self.laplacian_kernel = self._get_laplacian_kernel(laplacian_kernel_type)
+        self.laplacian_kernel = self.select_laplacian_kernel(laplacian_kernel_type)
         logger.info(f"LaplacianImageSharpener initialized with {laplacian_kernel_type} kernel")
 
-    def _get_laplacian_kernel(self, laplacian_kernel_type):
+    def select_laplacian_kernel(self, laplacian_kernel_type):
         """Return Laplacian kernel matrix for requested connectivity."""
         if laplacian_kernel_type == '8-connected':
             return np.array([[-1, -1, -1],

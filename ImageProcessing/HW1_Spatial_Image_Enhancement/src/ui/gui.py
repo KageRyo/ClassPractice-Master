@@ -11,37 +11,38 @@ from PIL import Image, ImageTk
 class ProcessedItem:
     filename: str
     comparison_figure_path: Optional[str]
+    gamma_value: Optional[float] = None
 
 
 class ImageReviewApp:
     """Tkinter GUI for browsing processed enhancement comparison figures."""
 
-    def __init__(self, processed_items: Optional[List[ProcessedItem]], gamma_value: float):
+    def __init__(self, processed_items: Optional[List[ProcessedItem]], gamma_value: Optional[float]):
         self.processed_items = list(processed_items or [])
-        self.gamma_value = gamma_value
+        self.default_gamma_value = gamma_value
         self.current_index = 0
 
         self.comparison_cache: Dict[str, Image.Image] = {}
         self.comparison_photo: Optional[ImageTk.PhotoImage] = None
         self.comparison_source_path: Optional[str] = None
-        self._comparison_after_id: Optional[str] = None
+        self.comparison_after_id: Optional[str] = None
 
         self.root = tk.Tk()
         self.root.title("614410073 - Image Processing HW1")
         self.root.geometry("1100x820")
         self.root.minsize(860, 600)
 
-        self._build_layout()
+        self.build_layout()
         if self.processed_items:
-            self._set_controls_enabled(True)
+            self.set_controls_enabled(True)
             self.update_processed_items(self.processed_items)
             self.set_processing_message("Processing complete")
         else:
-            self._set_controls_enabled(False)
-            self._clear_display()
+            self.set_controls_enabled(False)
+            self.clear_display()
             self.set_processing_message("Processing images...")
 
-    def _build_layout(self):
+    def build_layout(self):
         self.processing_status_var = tk.StringVar(value="Processing images...")
         self.image_status_var = tk.StringVar(value="")
         self.detail_var = tk.StringVar(value="")
@@ -67,7 +68,7 @@ class ImageReviewApp:
             state="disabled",
             width=30,
         )
-        self.selection_combo.bind("<<ComboboxSelected>>", self._on_combo_selected)
+        self.selection_combo.bind("<<ComboboxSelected>>", self.handle_combo_selected)
         self.selection_combo.pack(side=tk.LEFT)
 
         ttk.Label(control_frame, textvariable=self.image_status_var).pack(side=tk.RIGHT)
@@ -79,7 +80,7 @@ class ImageReviewApp:
 
         self.comparison_label = tk.Label(comparison_container, borderwidth=0, background="#ffffff")
         self.comparison_label.grid(row=0, column=0, sticky="nsew")
-        self.comparison_label.bind("<Configure>", self._on_comparison_resize)
+        self.comparison_label.bind("<Configure>", self.handle_comparison_resize)
 
         details_frame = ttk.Frame(self.root, padding=(12, 0, 12, 6))
         details_frame.pack(fill=tk.X)
@@ -102,35 +103,35 @@ class ImageReviewApp:
         self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         log_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-    def _set_controls_enabled(self, enabled: bool):
+    def set_controls_enabled(self, enabled: bool):
         state = tk.NORMAL if enabled else tk.DISABLED
         self.prev_button.configure(state=state)
         self.next_button.configure(state=state)
         combo_state = "readonly" if enabled else "disabled"
         self.selection_combo.configure(state=combo_state)
 
-    def _clear_display(self):
+    def clear_display(self):
         self.comparison_label.configure(image="", text="Processing...", compound=tk.CENTER)
         self.comparison_label.image = None  # type: ignore[attr-defined]
         self.comparison_photo = None
         self.comparison_source_path = None
-        if self._comparison_after_id:
-            self.root.after_cancel(self._comparison_after_id)
-            self._comparison_after_id = None
+        if self.comparison_after_id:
+            self.root.after_cancel(self.comparison_after_id)
+            self.comparison_after_id = None
         self.image_status_var.set("")
         self.detail_var.set("Processing images... Please wait.")
 
-    def _on_combo_selected(self, _event):  # pragma: no cover - GUI callback
+    def handle_combo_selected(self, event):  # pragma: no cover - GUI callback
         if not self.processed_items:
             return
         selected_name = self.selection_var.get()
-        for idx, item in enumerate(self.processed_items):
+        for index, item in enumerate(self.processed_items):
             if item.filename == selected_name:
-                self.current_index = idx
-                self._update_display()
+                self.current_index = index
+                self.update_display()
                 break
 
-    def _get_comparison_base_image(self, path: Optional[str]) -> Optional[Image.Image]:
+    def load_comparison_base_image(self, path: Optional[str]) -> Optional[Image.Image]:
         if not path or not os.path.exists(path):
             return None
         try:
@@ -152,13 +153,13 @@ class ImageReviewApp:
         self.comparison_cache[cache_key] = base_image
         return base_image
 
-    def _render_comparison_image(self):
-        if self._comparison_after_id:
+    def render_comparison_image(self):
+        if self.comparison_after_id:
             try:
-                self.root.after_cancel(self._comparison_after_id)
+                self.root.after_cancel(self.comparison_after_id)
             except tk.TclError:
                 pass
-            self._comparison_after_id = None
+            self.comparison_after_id = None
 
         if not self.comparison_source_path:
             return
@@ -167,10 +168,10 @@ class ImageReviewApp:
         width = label.winfo_width()
         height = label.winfo_height()
         if width <= 1 or height <= 1:
-            self._comparison_after_id = self.root.after(60, self._render_comparison_image)
+            self.comparison_after_id = self.root.after(60, self.render_comparison_image)
             return
 
-        base_image = self._get_comparison_base_image(self.comparison_source_path)
+        base_image = self.load_comparison_base_image(self.comparison_source_path)
         if base_image is None or base_image.width == 0 or base_image.height == 0:
             label.configure(image="", text="Comparison figure unavailable", compound=tk.CENTER)
             label.image = None  # type: ignore[attr-defined]
@@ -194,34 +195,34 @@ class ImageReviewApp:
         label.image = photo  # type: ignore[attr-defined]
         self.comparison_photo = photo
 
-    def _on_comparison_resize(self, _event):  # pragma: no cover - GUI callback
+    def handle_comparison_resize(self, event):  # pragma: no cover - GUI callback
         if not self.comparison_source_path:
             return
-        if self._comparison_after_id:
+        if self.comparison_after_id:
             try:
-                self.root.after_cancel(self._comparison_after_id)
+                self.root.after_cancel(self.comparison_after_id)
             except tk.TclError:
                 pass
-        self._comparison_after_id = self.root.after(40, self._render_comparison_image)
+        self.comparison_after_id = self.root.after(40, self.render_comparison_image)
 
-    def _update_display(self):  # pragma: no cover - GUI side effect
+    def update_display(self):  # pragma: no cover - GUI side effect
         if not self.processed_items:
             return
 
         item = self.processed_items[self.current_index]
-        if self._comparison_after_id:
+        if self.comparison_after_id:
             try:
-                self.root.after_cancel(self._comparison_after_id)
+                self.root.after_cancel(self.comparison_after_id)
             except tk.TclError:
                 pass
-            self._comparison_after_id = None
+            self.comparison_after_id = None
 
         if item.comparison_figure_path and os.path.exists(item.comparison_figure_path):
             self.comparison_source_path = item.comparison_figure_path
             self.comparison_photo = None
             self.comparison_label.configure(image="", text="Loading...", compound=tk.CENTER)
             self.comparison_label.image = None  # type: ignore[attr-defined]
-            self._render_comparison_image()
+            self.render_comparison_image()
         else:
             self.comparison_source_path = None
             self.comparison_photo = None
@@ -230,7 +231,19 @@ class ImageReviewApp:
 
         self.selection_var.set(item.filename)
         self.image_status_var.set(f"Image {self.current_index + 1} of {len(self.processed_items)}")
-        self.detail_var.set(f"Gamma: {self.gamma_value}    File: {item.filename}")
+        item_gamma = item.gamma_value
+        if item_gamma is not None:
+            if self.default_gamma_value is None:
+                gamma_display = f"auto ({item_gamma:.3f})"
+            else:
+                gamma_display = f"{item_gamma:.3f}"
+        else:
+            if self.default_gamma_value is None:
+                gamma_display = "auto"
+            else:
+                gamma_display = f"{self.default_gamma_value:.3f}"
+
+        self.detail_var.set(f"Gamma: {gamma_display}    File: {item.filename}")
 
     def append_log_message(self, message: str):
         self.log_text.configure(state=tk.NORMAL)
@@ -241,16 +254,16 @@ class ImageReviewApp:
     def update_processed_items(self, processed_items: List[ProcessedItem]):
         self.processed_items = list(processed_items)
         if not self.processed_items:
-            self._set_controls_enabled(False)
+            self.set_controls_enabled(False)
             self.selection_combo.configure(values=[])
-            self._clear_display()
+            self.clear_display()
             return
 
         self.comparison_cache.clear()
         self.selection_combo.configure(values=[item.filename for item in self.processed_items])
         self.current_index = 0
-        self._set_controls_enabled(True)
-        self._update_display()
+        self.set_controls_enabled(True)
+        self.update_display()
 
     def set_processing_message(self, message: str):
         self.processing_status_var.set(message)
@@ -274,13 +287,13 @@ class ImageReviewApp:
         if not self.processed_items:
             return
         self.current_index = (self.current_index + 1) % len(self.processed_items)
-        self._update_display()
+        self.update_display()
 
     def show_previous(self):  # pragma: no cover - GUI callback
         if not self.processed_items:
             return
         self.current_index = (self.current_index - 1) % len(self.processed_items)
-        self._update_display()
+        self.update_display()
 
     def show_error(self, message: str):  # pragma: no cover - GUI side effect
         messagebox.showerror("Processing Error", message)

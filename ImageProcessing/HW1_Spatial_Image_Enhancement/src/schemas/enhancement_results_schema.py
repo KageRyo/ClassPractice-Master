@@ -17,7 +17,7 @@ class EnhancementResultsSchema(BaseModel):
 
     @field_validator('power_law', 'hist_eq', 'laplacian', mode='before')
     @classmethod
-    def _validate_array(cls, v, info):  # noqa: D401
+    def validate_array_contents(cls, v, info):  # noqa: D401
         field_name = info.field_name
         if not isinstance(v, np.ndarray):
             raise TypeError(f"{field_name} must be a numpy.ndarray")
@@ -30,7 +30,7 @@ class EnhancementResultsSchema(BaseModel):
         return v
 
     @model_validator(mode='after')
-    def _shapes_match(self):
+    def ensure_matching_shapes(self):
         ref_shape = self.power_law.shape
         if self.hist_eq.shape != ref_shape or self.laplacian.shape != ref_shape:
             raise ValueError(
