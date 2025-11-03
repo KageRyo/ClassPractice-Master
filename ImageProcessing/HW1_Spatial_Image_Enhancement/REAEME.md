@@ -83,7 +83,7 @@ python -m PyInstaller --clean --noconfirm HW1_Image_Enhancement.spec
 打包完成後，`dist/HW1_Image_Enhancement.exe` 可直接在 Windows 上執行，輸出仍會寫入當前目錄的 `results/`。
 
 ## 作者資訊
-- 張健勳（Chien-Hsun Chang）
-- 國立中正大學影像處理課程作業 #1
+- 作者：張健勳（Chien-Hsun Chang）
+- 課程：影像處理 Image Processing
 - 學號：614410073
-- 日期：2025-11-01
+- 日期：2025-11-03
