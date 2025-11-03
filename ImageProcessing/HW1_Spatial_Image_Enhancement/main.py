@@ -1,4 +1,4 @@
-# Made By Chien-Hsun Chang (614410073) at 2025-11-01
+# Made By Chien-Hsun Chang (614410073) at 2025-11-03
 # Course: Image Processing at CCU
 # Assignment: Homework 1 - Spatial Image Enhancement
 
