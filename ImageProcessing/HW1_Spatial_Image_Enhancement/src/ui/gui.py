@@ -11,14 +11,15 @@ from PIL import Image, ImageTk
 class ProcessedItem:
     filename: str
     comparison_figure_path: Optional[str]
+    gamma_value: Optional[float] = None
 
 
 class ImageReviewApp:
     """Tkinter GUI for browsing processed enhancement comparison figures."""
 
-    def __init__(self, processed_items: Optional[List[ProcessedItem]], gamma_value: float):
+    def __init__(self, processed_items: Optional[List[ProcessedItem]], gamma_value: Optional[float]):
         self.processed_items = list(processed_items or [])
-        self.gamma_value = gamma_value
+        self.default_gamma_value = gamma_value
         self.current_index = 0
 
         self.comparison_cache: Dict[str, Image.Image] = {}
@@ -230,7 +231,19 @@ class ImageReviewApp:
 
         self.selection_var.set(item.filename)
         self.image_status_var.set(f"Image {self.current_index + 1} of {len(self.processed_items)}")
-        self.detail_var.set(f"Gamma: {self.gamma_value}    File: {item.filename}")
+        item_gamma = item.gamma_value
+        if item_gamma is not None:
+            if self.default_gamma_value is None:
+                gamma_display = f"auto ({item_gamma:.3f})"
+            else:
+                gamma_display = f"{item_gamma:.3f}"
+        else:
+            if self.default_gamma_value is None:
+                gamma_display = "auto"
+            else:
+                gamma_display = f"{self.default_gamma_value:.3f}"
+
+        self.detail_var.set(f"Gamma: {gamma_display}    File: {item.filename}")
 
     def append_log_message(self, message: str):
         self.log_text.configure(state=tk.NORMAL)
