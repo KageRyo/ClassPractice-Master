@@ -1,4 +1,4 @@
-# Made By Chien-Hsun Chang (614410073) at 2025-11-01
+# Made By Chien-Hsun Chang (614410073) at 2025-11-03
 # Course: Image Processing at CCU
 # Assignment: Homework 1 - Spatial Image Enhancement
 
@@ -6,9 +6,9 @@ import sys
 import os
 import threading
 import logging
-from typing import List
+from typing import List, Optional, Tuple
 
-# Add better resource path handling for PyInstaller
+# Add resource path handling for PyInstaller
 def get_resource_path(relative_path):
     """Get the absolute path to a resource, works for dev and for PyInstaller"""
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -40,7 +40,9 @@ def main():
     logger = get_logger(__name__)
     
     try:
-        gamma_value = 2.2  # Centralized gamma setting
+        gamma_value: Optional[float] = None  # None = enable adaptive gamma selection
+        auto_gamma_bounds: Tuple[float, float] = (0.35, 1.8)
+        target_mean_intensity = 0.6
         
         # Try to find test_image directory in different possible locations
         test_image_path = 'test_image'
@@ -98,14 +100,16 @@ def main():
                 for index, image_filename in enumerate(image_names, start=1):
                     app.schedule_processing_message(f"Processing {index}/{total_images}: {image_filename}")
                     original_image = loaded_images_dictionary[image_filename]
-                    results = process_single_image(
+                    results, resolved_gamma = process_single_image(
                         image_filename=image_filename,
                         image_array=original_image,
                         gamma_value=gamma_value,
                         logger=logger,
                         visualizer=enhancement_visualizer,
                         loader=image_file_loader,
-                        visualize=False
+                        visualize=False,
+                        auto_gamma_bounds=auto_gamma_bounds,
+                        target_mean_intensity=target_mean_intensity
                     )
 
                     figure_path = visualize_results(
@@ -113,7 +117,7 @@ def main():
                         original_image=original_image,
                         results=results,
                         visualizer=enhancement_visualizer,
-                        gamma_value=gamma_value,
+                        gamma_value=resolved_gamma,
                         display_plot_immediately=False
                     )
                     logger.info(f"Saved comparison figure to {figure_path}")
@@ -129,8 +133,10 @@ def main():
                         logger.warning("No histogram figures generated for %s", image_filename)
                     processed_items.append(ProcessedItem(
                         filename=image_filename,
-                        comparison_figure_path=figure_path
+                        comparison_figure_path=figure_path,
+                        gamma_value=resolved_gamma
                     ))
+                    logger.info("Resolved gamma for %s: %.3f", image_filename, resolved_gamma)
 
                 logger.info("=" * 60)
                 logger.info("All image processing completed successfully!")
