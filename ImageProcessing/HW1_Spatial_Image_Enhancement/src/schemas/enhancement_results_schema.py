@@ -13,9 +13,9 @@ class EnhancementResultsSchema(BaseModel):
 
     power_law: np.ndarray = Field(..., description="Gamma corrected image array")
     hist_eq: np.ndarray = Field(..., description="Histogram equalized image array")
-    laplacian: np.ndarray = Field(..., description="Laplacian sharpened image array")
+    gamma_laplacian: np.ndarray = Field(..., description="Gamma preprocessed and Laplacian sharpened image array")
 
-    @field_validator('power_law', 'hist_eq', 'laplacian', mode='before')
+    @field_validator('power_law', 'hist_eq', 'gamma_laplacian', mode='before')
     @classmethod
     def validate_array_contents(cls, v, info):  # noqa: D401
         field_name = info.field_name
@@ -32,9 +32,9 @@ class EnhancementResultsSchema(BaseModel):
     @model_validator(mode='after')
     def ensure_matching_shapes(self):
         ref_shape = self.power_law.shape
-        if self.hist_eq.shape != ref_shape or self.laplacian.shape != ref_shape:
+        if self.hist_eq.shape != ref_shape or self.gamma_laplacian.shape != ref_shape:
             raise ValueError(
                 "Shape mismatch among enhancement outputs: "
-                f"power_law={ref_shape}, hist_eq={self.hist_eq.shape}, laplacian={self.laplacian.shape}"
+                f"power_law={ref_shape}, hist_eq={self.hist_eq.shape}, gamma_laplacian={self.gamma_laplacian.shape}"
             )
         return self

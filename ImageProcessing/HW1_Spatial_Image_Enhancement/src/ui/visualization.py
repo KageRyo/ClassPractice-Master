@@ -16,19 +16,19 @@ class ImageEnhancementVisualizer:
 
     def display_complete_enhancement_results(self, image_filename, original_image_array,
                                              power_law_transformed_result, histogram_equalized_result,
-                                             laplacian_sharpened_result, gamma_value=2.2,
+                                             gamma_then_laplacian_result, gamma_value=2.2,
                                              figure_save_path=None, display_plot_immediately=True):
         """Display four processed images and their histograms in a 2x4 grid."""
         matplotlib_figure, subplot_axes = plt.subplots(2, 4, figsize=self.figure_size_dimensions)
         matplotlib_figure.suptitle(f'Image Enhancement Results - {image_filename}', fontsize=16)
         self.display_single_image_on_axes(subplot_axes[0, 0], original_image_array, 'Original Image')
-        self.display_single_image_on_axes(subplot_axes[0, 1], power_law_transformed_result, f'Power-law (γ={gamma_value:.3f})')
+        self.display_single_image_on_axes(subplot_axes[0, 1], power_law_transformed_result, f'Power-law (γ={gamma_value:.2f})')
         self.display_single_image_on_axes(subplot_axes[0, 2], histogram_equalized_result, 'Histogram Equalization')
-        self.display_single_image_on_axes(subplot_axes[0, 3], laplacian_sharpened_result, 'Laplacian Sharpening')
+        self.display_single_image_on_axes(subplot_axes[0, 3], gamma_then_laplacian_result, 'Gamma + Laplacian')
 
-        processed_image_list = [original_image_array, power_law_transformed_result, histogram_equalized_result, laplacian_sharpened_result]
+        processed_image_list = [original_image_array, power_law_transformed_result, histogram_equalized_result, gamma_then_laplacian_result]
         histogram_title_list = ['Original Histogram', 'Power-law Histogram',
-                                'Equalized Histogram', 'Sharpened Histogram']
+                                'Equalized Histogram', 'Gamma + Laplacian Histogram']
         histogram_color_list = ['blue', 'green', 'red', 'orange']
         for i, (processed_image, histogram_title, histogram_color) in enumerate(zip(processed_image_list, histogram_title_list, histogram_color_list)):
             self.display_histogram_on_axes(subplot_axes[1, i], processed_image, histogram_title, histogram_color)
