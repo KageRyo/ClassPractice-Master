@@ -234,14 +234,14 @@ class ImageReviewApp:
         item_gamma = item.gamma_value
         if item_gamma is not None:
             if self.default_gamma_value is None:
-                gamma_display = f"auto ({item_gamma:.3f})"
+                gamma_display = f"auto ({item_gamma:.2f})"
             else:
-                gamma_display = f"{item_gamma:.3f}"
+                gamma_display = f"{item_gamma:.2f}"
         else:
             if self.default_gamma_value is None:
                 gamma_display = "auto"
             else:
-                gamma_display = f"{self.default_gamma_value:.3f}"
+                gamma_display = f"{self.default_gamma_value:.2f}"
 
         self.detail_var.set(f"Gamma: {gamma_display}    File: {item.filename}")
 
