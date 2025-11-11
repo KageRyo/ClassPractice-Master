@@ -50,7 +50,7 @@ class ImageReviewApp:
 
         header_frame = ttk.Frame(self.root, padding=(12, 12, 12, 6))
         header_frame.pack(fill=tk.X)
-        ttk.Label(header_frame, text='614410073 張健勳', font=('Segoe UI', 16, 'bold')).pack(side=tk.LEFT)
+        ttk.Label(header_frame, text='614410073 - Chien-Hsun Chang 張健勳', font=('Segoe UI', 16, 'bold')).pack(side=tk.LEFT)
         ttk.Label(header_frame, textvariable=self.processing_status_var, font=('Segoe UI', 12)).pack(side=tk.RIGHT)
 
         control_frame = ttk.Frame(self.root, padding=(12, 6))
@@ -72,7 +72,14 @@ class ImageReviewApp:
 
         detail_frame = ttk.Frame(self.root, padding=(12, 0, 12, 10))
         detail_frame.pack(fill=tk.X)
-        ttk.Label(detail_frame, textvariable=self.detail_var, font=('Segoe UI', 10)).pack(side=tk.LEFT)
+        detail_label = ttk.Label(
+            detail_frame,
+            textvariable=self.detail_var,
+            font=('Segoe UI', 10),
+            wraplength=1050,
+            justify=tk.LEFT,
+        )
+        detail_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         canvas_frame = ttk.Frame(self.root, padding=(12, 0, 12, 10))
         canvas_frame.pack(fill=tk.BOTH, expand=True)
