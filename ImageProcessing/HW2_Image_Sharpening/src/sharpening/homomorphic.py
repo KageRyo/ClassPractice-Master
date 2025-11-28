@@ -66,18 +66,27 @@ class HomomorphicFilteringOperator:
         spatial_real = np.real(spatial_log)
 
         exp_result = np.exp(spatial_real)
-        exp_result = np.clip(exp_result, 1e-6, None)
 
-        min_val = float(exp_result.min())
-        max_val = float(exp_result.max())
-        if not math.isfinite(min_val) or not math.isfinite(max_val) or max_val <= min_val:
-            logger.warning(
-                'Homomorphic filter produced degenerate range; returning zeros image')
-            return np.zeros_like(image, dtype=np.uint8)
+        # Robust normalization using percentiles to handle outliers
+        # This prevents a few high-value pixels from suppressing the rest of the image
+        p_min, p_max = np.percentile(exp_result, (1, 99))
 
-        normalized_output = (exp_result - min_val) / (max_val - min_val)
-        output_uint8 = np.clip(
-            np.rint(normalized_output * 255.0), 0, 255).astype(np.uint8)
+        if p_max > p_min:
+            normalized_output = (exp_result - p_min) / (p_max - p_min)
+            normalized_output = np.clip(normalized_output, 0, 1)
+        else:
+            # Fallback to standard min/max if percentiles are degenerate
+            min_val = float(exp_result.min())
+            max_val = float(exp_result.max())
+            if max_val > min_val:
+                normalized_output = (exp_result - min_val) / \
+                    (max_val - min_val)
+            else:
+                logger.warning(
+                    'Homomorphic filter produced degenerate range; returning zeros image')
+                return np.zeros_like(image, dtype=np.uint8)
+
+        output_uint8 = np.rint(normalized_output * 255.0).astype(np.uint8)
         logger.debug('Homomorphic filtering completed')
         return output_uint8
 

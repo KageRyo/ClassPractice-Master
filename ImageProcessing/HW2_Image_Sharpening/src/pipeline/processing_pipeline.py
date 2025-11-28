@@ -20,8 +20,8 @@ class SharpeningParameters:
     laplacian_alpha: float = 1.0
     unsharp_amount: float = 1.0
     high_boost_factor: float = 1.8
-    homomorphic_gamma_l: float = 0.6
-    homomorphic_gamma_h: float = 2.0
+    homomorphic_gamma_l: float = 0.8
+    homomorphic_gamma_h: float = 1.5
     homomorphic_cutoff: float = 40.0
     homomorphic_c: float = 1.2
 
@@ -47,18 +47,23 @@ def compute_sharpening_outputs(
 ) -> SharpeningResultsSchema:
     image_uint8 = sanitize_to_uint8(image_array)
 
-    logger.info('  Applying Laplacian sharpening (%s kernel)...', params.laplacian_kernel)
+    logger.info('  Applying Laplacian sharpening (%s kernel)...',
+                params.laplacian_kernel)
     laplacian_image = apply_laplacian_sharpening(
         image_uint8,
         kernel_type=params.laplacian_kernel,
         alpha=params.laplacian_alpha,
     )
 
-    logger.info('  Applying unsharp masking (amount=%.2f)...', params.unsharp_amount)
-    unsharp_image = apply_unsharp_masking(image_uint8, amount=params.unsharp_amount)
+    logger.info('  Applying unsharp masking (amount=%.2f)...',
+                params.unsharp_amount)
+    unsharp_image = apply_unsharp_masking(
+        image_uint8, amount=params.unsharp_amount)
 
-    logger.info('  Applying high-boost filtering (factor=%.2f)...', params.high_boost_factor)
-    high_boost_image = apply_high_boost_filter(image_uint8, boost_factor=params.high_boost_factor)
+    logger.info('  Applying high-boost filtering (factor=%.2f)...',
+                params.high_boost_factor)
+    high_boost_image = apply_high_boost_filter(
+        image_uint8, boost_factor=params.high_boost_factor)
 
     logger.info(
         '  Applying homomorphic filtering (gamma_l=%.2f, gamma_h=%.2f, D0=%.1f, c=%.2f)...',
@@ -94,7 +99,8 @@ def visualize_results(
 ) -> str:
     base_name = os.path.splitext(image_filename)[0]
     os.makedirs(figure_dir, exist_ok=True)
-    comparison_figure_path = os.path.join(figure_dir, f'{base_name}_sharpening_comparison.png')
+    comparison_figure_path = os.path.join(
+        figure_dir, f'{base_name}_sharpening_comparison.png')
     visualizer.display_sharpening_results(
         image_filename=image_filename,
         original_image=sanitize_to_uint8(original_image),
