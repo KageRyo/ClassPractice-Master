@@ -31,8 +31,8 @@ class ImageReviewApp:
 
         self.root = tk.Tk()
         self.root.title('614410073 - Image Processing HW3')
-        self.root.geometry('1300x700')
-        self.root.minsize(880, 600)
+        self.root.geometry('900x650')
+        self.root.minsize(700, 550)
 
         self.build_layout()
         if self.processed_items:

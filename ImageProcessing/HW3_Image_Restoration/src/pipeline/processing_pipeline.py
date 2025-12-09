@@ -28,7 +28,7 @@ class RestorationParameters:
 
     def summarize(self) -> str:
         return (
-            f"Degradation: H(u,v)=exp(-k*(u²+v²)^(5/6)), k={self.k:.6f} | "
+            f"Degradation: H(u,v)=exp(-k*(u²+v²)^(5/6)), k={self.k:.6f}\n"
             f"Inverse: cutoff={self.inverse_cutoff_radius:.1f} | "
             f"Wiener: noise_var={self.noise_variance:.1f}"
         )
