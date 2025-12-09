@@ -140,15 +140,15 @@ class WienerFilterOperator:
         restored_spatial = np.fft.ifft2(restored_shifted)
         restored_real = np.real(restored_spatial)
         
-        # 正規化到 [0, 255] 範圍
-        min_val = restored_real.min()
-        max_val = restored_real.max()
+        # 使用百分位數正規化，避免極端值影響
+        p_low, p_high = np.percentile(restored_real, (1, 99))
         
-        if max_val > min_val:
-            normalized = (restored_real - min_val) / (max_val - min_val) * 255.0
+        if p_high > p_low:
+            normalized = (restored_real - p_low) / (p_high - p_low) * 255.0
+            normalized = np.clip(normalized, 0, 255)
         else:
-            logger.warning('Wiener filter produced constant output; returning zeros')
-            return np.zeros_like(degraded_image, dtype=np.uint8)
+            logger.warning('Wiener filter produced near-constant output')
+            normalized = np.full_like(restored_real, np.mean(degraded_image))
         
         output_uint8 = np.clip(np.rint(normalized), 0, 255).astype(np.uint8)
         logger.debug('Wiener filtering completed')

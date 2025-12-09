@@ -16,10 +16,10 @@ from src.utils.image_utils import ImageFileLoader
 class RestorationParameters:
     """Parameters for image restoration algorithms."""
     # 退化函數參數
-    k: float = 0.0025  # 系統參數
+    k: float = 0.001  # 系統參數 (調整此值以匹配實際退化程度)
     
     # 逆濾波參數
-    inverse_cutoff_radius: float = 50.0  # 低通濾波器截止頻率
+    inverse_cutoff_radius: float = 80.0  # 低通濾波器截止頻率 (較大值可保留更多細節)
     inverse_epsilon: float = 1e-6  # 防止除零的小常數
     
     # 維納濾波參數
@@ -29,7 +29,7 @@ class RestorationParameters:
     def summarize(self) -> str:
         return (
             f"Degradation: H(u,v)=exp(-k*(u²+v²)^(5/6)), k={self.k:.6f} | "
-            f"Inverse: cutoff={self.inverse_cutoff_radius:.1f}, ε={self.inverse_epsilon:.2e} | "
+            f"Inverse: cutoff={self.inverse_cutoff_radius:.1f} | "
             f"Wiener: noise_var={self.noise_variance:.1f}"
         )
 
