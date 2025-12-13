@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 
 
 class ImageRestorationVisualizer:
-    """Create comparison figures for original and restored images."""
+    """Create comparison figures for original, degraded, and restored images."""
 
-    def __init__(self, figure_size=(16, 5), dpi=180):
+    def __init__(self, figure_size=(20, 5), dpi=180):
         self.figure_size = figure_size
         self.dpi = dpi
         logger.info(
@@ -28,12 +28,12 @@ class ImageRestorationVisualizer:
         display_plot_immediately: bool = True,
     ) -> Optional[str]:
         """
-        顯示原始影像與兩種復原方法的結果（共3張圖）。
+        顯示原始、退化和復原影像的比較圖（共4張圖）。
         
         Args:
             image_filename: 影像檔名
             original_image: 原始影像
-            degraded_image: 退化影像（不顯示，僅供參考）
+            degraded_image: 退化影像
             results: 復原結果
             figure_save_path: 圖形儲存路徑
             display_plot_immediately: 是否立即顯示
@@ -42,12 +42,13 @@ class ImageRestorationVisualizer:
             儲存路徑（如果有儲存）
         """
         figure, axes = plt.subplots(
-            1, 3, figsize=self.figure_size, dpi=self.dpi)
+            1, 4, figsize=self.figure_size, dpi=self.dpi)
         figure.suptitle(
             f'Image Restoration Results - {image_filename}', fontsize=16)
 
         images = [
             (original_image, 'Original'),
+            (degraded_image, 'Degraded'),
             (results.inverse_filtered, 'Inverse Filter'),
             (results.wiener_filtered, 'Wiener Filter'),
         ]
