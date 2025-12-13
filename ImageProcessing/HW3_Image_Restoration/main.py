@@ -36,7 +36,7 @@ from src.utils.logging_config import get_logger, setup_logging  # noqa: E402
 
 
 def resolve_test_image_path(logger: logging.Logger) -> str:
-    """尋找測試影像目錄。"""
+    """Find test image directory."""
     candidate_paths = [
         'test_image',
         get_resource_path('test_image'),
@@ -54,18 +54,9 @@ def pair_original_and_degraded_images(
     image_names: List[str],
     logger: logging.Logger,
 ) -> List[Tuple[str, str]]:
-    """
-    配對原始影像與退化影像。
-    
-    假設檔名規則：
-    - 原始影像：image1.bmp, image2.bmp, ...
-    - 退化影像：image1_degraded.bmp, image1_noise.bmp, ...
-    
-    或者按順序配對（前4張為原始，後4張為退化）。
-    """
+    """Pair original and degraded images by filename pattern or order."""
     pairs = []
     
-    # 嘗試根據檔名模式配對
     original_images = []
     degraded_images = []
     
@@ -76,7 +67,6 @@ def pair_original_and_degraded_images(
         else:
             original_images.append(name)
     
-    # 如果成功分類
     if len(original_images) == len(degraded_images) > 0:
         original_images.sort()
         degraded_images.sort()
@@ -84,7 +74,6 @@ def pair_original_and_degraded_images(
             pairs.append((orig, deg))
         logger.info('Paired images by filename pattern: %d pairs', len(pairs))
     else:
-        # 按順序配對（假設前半為原始，後半為退化）
         sorted_names = sorted(image_names)
         half = len(sorted_names) // 2
         if half > 0:
@@ -92,7 +81,6 @@ def pair_original_and_degraded_images(
                 pairs.append((sorted_names[i], sorted_names[half + i]))
             logger.info('Paired images by order: %d pairs', len(pairs))
         else:
-            # 單張影像自己配對（用於測試）
             for name in image_names:
                 pairs.append((name, name))
             logger.warning('Could not pair images; using self-pairing for testing')
@@ -123,7 +111,6 @@ def main():
                 'Execution aborted.'
             )
 
-        # 配對影像
         image_pairs = pair_original_and_degraded_images(image_names, logger)
         logger.info('Found %d image pair(s) for processing', len(image_pairs))
 
@@ -168,11 +155,9 @@ def main():
                     logger.info('Processing pair %d/%d: %s <-> %s',
                                index, total_pairs, original_name, degraded_name)
                     
-                    # 執行復原處理
                     results = compute_restoration_outputs(degraded_image, params, logger)
                     stats = collect_intensity_statistics(results, original_image, degraded_image)
                     
-                    # 計算 PSNR
                     original_uint8 = sanitize_to_uint8(original_image)
                     psnr_inverse = compute_psnr(original_uint8, results.inverse_filtered)
                     psnr_wiener = compute_psnr(original_uint8, results.wiener_filtered)
@@ -180,10 +165,8 @@ def main():
                     logger.info('  PSNR - Inverse: %.2f dB, Wiener: %.2f dB',
                                psnr_inverse, psnr_wiener)
                     
-                    # 儲存結果
                     save_results(f'{os.path.splitext(original_name)[0]}_restored', results, image_loader)
                     
-                    # 產生比較圖
                     figure_path = visualize_results(
                         image_filename=original_name,
                         original_image=original_image,

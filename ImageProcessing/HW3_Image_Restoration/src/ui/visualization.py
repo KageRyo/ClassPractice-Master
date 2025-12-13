@@ -27,20 +27,7 @@ class ImageRestorationVisualizer:
         figure_save_path: Optional[str] = None,
         display_plot_immediately: bool = True,
     ) -> Optional[str]:
-        """
-        顯示原始、退化和復原影像的比較圖（共4張圖）。
-        
-        Args:
-            image_filename: 影像檔名
-            original_image: 原始影像
-            degraded_image: 退化影像
-            results: 復原結果
-            figure_save_path: 圖形儲存路徑
-            display_plot_immediately: 是否立即顯示
-            
-        Returns:
-            儲存路徑（如果有儲存）
-        """
+        """Display comparison of original, degraded, and restored images."""
         figure, axes = plt.subplots(
             1, 4, figsize=self.figure_size, dpi=self.dpi)
         figure.suptitle(
@@ -81,19 +68,7 @@ class ImageRestorationVisualizer:
         figure_save_path: Optional[str] = None,
         display_plot_immediately: bool = True,
     ) -> Optional[str]:
-        """
-        顯示影像的頻率譜。
-        
-        Args:
-            image: 灰階影像
-            title: 圖形標題
-            figure_save_path: 儲存路徑
-            display_plot_immediately: 是否立即顯示
-            
-        Returns:
-            儲存路徑
-        """
-        # 計算 FFT
+        """Display frequency spectrum of an image."""
         frequency = np.fft.fft2(image.astype(np.float64))
         frequency_shifted = np.fft.fftshift(frequency)
         magnitude = np.log(1 + np.abs(frequency_shifted))

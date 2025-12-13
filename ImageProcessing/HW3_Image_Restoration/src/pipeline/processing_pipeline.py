@@ -15,16 +15,11 @@ from src.utils.image_utils import ImageFileLoader
 @dataclass
 class RestorationParameters:
     """Parameters for image restoration algorithms."""
-    # 退化函數參數
-    k: float = 0.001  # 系統參數 (調整此值以匹配實際退化程度)
-    
-    # 逆濾波參數
-    inverse_cutoff_radius: float = 80.0  # 低通濾波器截止頻率 (較大值可保留更多細節)
-    inverse_epsilon: float = 1e-6  # 防止除零的小常數
-    
-    # 維納濾波參數
-    noise_variance: float = 100.0  # 雜訊方差（標準差為10時，方差為100）
-    signal_variance: float = None  # 信號方差（None 時自動估計）
+    k: float = 0.001
+    inverse_cutoff_radius: float = 80.0
+    inverse_epsilon: float = 1e-6
+    noise_variance: float = 100.0  # For Gaussian noise with std=10
+    signal_variance: float = None
 
     def summarize(self) -> str:
         return (
@@ -44,17 +39,7 @@ def compute_restoration_outputs(
     params: RestorationParameters,
     logger: logging.Logger,
 ) -> RestorationResultsSchema:
-    """
-    對退化影像執行兩種復原方法。
-    
-    Args:
-        degraded_image: 退化的灰階影像
-        params: 復原參數
-        logger: 日誌記錄器
-        
-    Returns:
-        包含兩種復原結果的 schema
-    """
+    """Apply inverse and Wiener filtering to degraded image."""
     image_uint8 = sanitize_to_uint8(degraded_image)
 
     logger.info('  Applying inverse filtering (k=%.6f, cutoff=%.1f)...',
@@ -91,21 +76,7 @@ def visualize_results(
     figure_dir: str = 'results',
     display_plot_immediately: bool = True,
 ) -> str:
-    """
-    產生比較圖並儲存。
-    
-    Args:
-        image_filename: 原始影像檔名
-        original_image: 原始影像
-        degraded_image: 退化影像
-        results: 復原結果
-        visualizer: 視覺化工具
-        figure_dir: 圖形儲存目錄
-        display_plot_immediately: 是否立即顯示
-        
-    Returns:
-        比較圖路徑
-    """
+    """Generate and save comparison figure."""
     base_name = os.path.splitext(image_filename)[0]
     os.makedirs(figure_dir, exist_ok=True)
     comparison_figure_path = os.path.join(
@@ -126,7 +97,7 @@ def save_results(
     results: RestorationResultsSchema,
     loader: ImageFileLoader,
 ) -> Dict[str, str]:
-    """儲存復原結果影像。"""
+    """Save restoration result images."""
     base_name = os.path.splitext(image_filename)[0]
     saved_paths = {
         'inverse_filtered': loader.save_image_array_to_file(
@@ -142,7 +113,7 @@ def collect_intensity_statistics(
     original_image: np.ndarray,
     degraded_image: np.ndarray,
 ) -> Dict[str, float]:
-    """收集影像強度統計資訊。"""
+    """Collect image intensity statistics."""
     def mean_intensity(image: np.ndarray) -> float:
         return float(np.mean(image))
 
@@ -156,16 +127,7 @@ def collect_intensity_statistics(
 
 
 def compute_psnr(original: np.ndarray, restored: np.ndarray) -> float:
-    """
-    計算峰值信噪比 (PSNR)。
-    
-    Args:
-        original: 原始影像
-        restored: 復原影像
-        
-    Returns:
-        PSNR 值（dB）
-    """
+    """Compute Peak Signal-to-Noise Ratio (PSNR) in dB."""
     original_float = original.astype(np.float64)
     restored_float = restored.astype(np.float64)
     
@@ -190,30 +152,12 @@ def process_image_pair(
     visualize: bool = True,
     save: bool = True,
 ) -> Tuple[RestorationResultsSchema, Dict[str, float]]:
-    """
-    處理一對原始與退化影像。
-    
-    Args:
-        original_filename: 原始影像檔名
-        degraded_filename: 退化影像檔名
-        original_image: 原始影像陣列
-        degraded_image: 退化影像陣列
-        params: 復原參數
-        logger: 日誌記錄器
-        visualizer: 視覺化工具
-        loader: 影像載入器
-        visualize: 是否顯示視覺化結果
-        save: 是否儲存結果
-        
-    Returns:
-        (復原結果, 統計資訊) 元組
-    """
+    """Process a pair of original and degraded images."""
     logger.info('Processing pair: %s <-> %s', original_filename, degraded_filename)
     
     results = compute_restoration_outputs(degraded_image, params, logger)
     stats = collect_intensity_statistics(results, original_image, degraded_image)
     
-    # 計算 PSNR
     original_uint8 = sanitize_to_uint8(original_image)
     psnr_inverse = compute_psnr(original_uint8, results.inverse_filtered)
     psnr_wiener = compute_psnr(original_uint8, results.wiener_filtered)
