@@ -41,14 +41,9 @@ class ColorImageReviewApp:
         self.root.minsize(900, 650)
 
         self.build_layout()
-        if self.processed_items:
-            self.set_controls_enabled(True)
-            self.update_processed_items(self.processed_items)
-            self.set_processing_message("Processing complete")
-        else:
-            self.set_controls_enabled(False)
-            self.clear_display()
-            self.set_processing_message("Processing images...")
+        self.set_controls_enabled(False)
+        self.clear_display()
+        self.set_processing_message("Initializing...")
 
     def build_layout(self):
         self.processing_status_var = tk.StringVar(value="Processing images...")
@@ -234,7 +229,9 @@ class ColorImageReviewApp:
             self.update_display()
 
     def update_processed_items(self, items: List[ProcessedItem]):
+        """Update the list of processed items and refresh display."""
         self.processed_items = list(items)
+        self.comparison_cache.clear()
         self.current_index = 0
         if self.processed_items:
             filenames = [item.filename for item in self.processed_items]
@@ -247,14 +244,41 @@ class ColorImageReviewApp:
             self.clear_display()
 
     def set_processing_message(self, message: str):
+        """Update the processing status message."""
         self.processing_status_var.set(message)
 
     def append_log(self, message: str):
+        """Append a message to the log text widget."""
         self.log_text.configure(state=tk.NORMAL)
         self.log_text.insert(tk.END, message + "\n")
         self.log_text.see(tk.END)
         self.log_text.configure(state=tk.DISABLED)
-        self.root.update_idletasks()
+
+    # Thread-safe scheduling methods for background processing
+    def schedule_processed_items(self, items: List[ProcessedItem]):
+        """Thread-safe method to update processed items from background thread."""
+        self.root.after(0, lambda: self.update_processed_items(items))
+
+    def schedule_processing_message(self, message: str):
+        """Thread-safe method to update processing message from background thread."""
+        self.root.after(0, lambda: self.set_processing_message(message))
+
+    def schedule_log_message(self, message: str):
+        """Thread-safe method to append log message from background thread."""
+        try:
+            self.root.after(0, lambda: self.append_log(message))
+        except tk.TclError:
+            pass
+
+    def schedule_error(self, message: str):
+        """Thread-safe method to show error from background thread."""
+        self.root.after(0, lambda: self.show_error(message))
+
+    def show_error(self, message: str):
+        """Show error dialog and quit application."""
+        messagebox.showerror("Processing Error", message)
+        self.root.quit()
 
     def run(self):
+        """Start the main GUI event loop."""
         self.root.mainloop()
