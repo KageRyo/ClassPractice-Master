@@ -52,7 +52,7 @@ def main():
         possible_paths = [
             'test_image',
             os.path.join(os.path.dirname(__file__), 'test_image'),
-            os.path.join(get_resource_path(''), 'test_image'),
+            get_resource_path('test_image'),
         ]
         
         for path in possible_paths:
@@ -62,16 +62,14 @@ def main():
         
         logger.info(f"Using test image directory: {test_image_path}")
         
-        # Initialize components
+        # Initialize image loader and check for images
         loader = ColorImageFileLoader(base_directory_path=test_image_path)
-        visualizer = ColorEnhancementVisualizer(figure_size_dimensions=(20, 10), image_resolution_dpi=200)
-        
-        # Get list of available images
         image_files = loader.list_available_images()
         
         if not image_files:
-            logger.error("No images found in test_image directory!")
-            return
+            raise FileNotFoundError(
+                "No supported test images found. Add PNG/JPG/BMP files to `test_image/` folder."
+            )
         
         logger.info(f"Found {len(image_files)} color image(s) to process")
         
@@ -79,21 +77,71 @@ def main():
         results_dir = 'results'
         os.makedirs(results_dir, exist_ok=True)
         
-        # Process images and collect results
-        processed_items: List[ProcessedItem] = []
+        # Create GUI first (will show "Processing..." state)
+        app = ColorImageReviewApp(processed_items=None, gamma_value=gamma_value)
         
-        def process_images():
-            """Background thread for processing images."""
-            nonlocal processed_items
-            
-            for idx, filename in enumerate(image_files):
+        # Setup log handler to redirect logs to GUI
+        class TkinterLogHandler(logging.Handler):
+            def __init__(self, gui_app: ColorImageReviewApp):
+                super().__init__()
+                self.gui_app = gui_app
+
+            def emit(self, record: logging.LogRecord):
                 try:
-                    logger.info(f"[{idx+1}/{len(image_files)}] Processing {filename}...")
+                    message = self.format(record)
+                    self.gui_app.schedule_log_message(message)
+                except Exception:
+                    self.handleError(record)
+
+        gui_handler = TkinterLogHandler(app)
+        gui_handler.setLevel(logging.INFO)
+        gui_handler.setFormatter(logging.Formatter(
+            '%(asctime)s - %(levelname)s - %(message)s', '%H:%M:%S'
+        ))
+        logging.getLogger().addHandler(gui_handler)
+        
+        # Error flag for background thread
+        processing_error = threading.Event()
+        
+        def build_status_message(done_list, processing_name, wait_list):
+            """Build status message showing done/processing/wait images."""
+            parts = []
+            if done_list:
+                done_str = ", ".join(done_list)
+                parts.append(f"Done: {done_str}")
+            if processing_name:
+                parts.append(f"Processing: {processing_name}")
+            if wait_list:
+                wait_str = ", ".join(wait_list)
+                parts.append(f"Wait: {wait_str}")
+            return " | ".join(parts)
+        
+        def processing_worker():
+            """Background thread for processing all images."""
+            try:
+                status_msg = build_status_message([], None, image_files)
+                app.schedule_processing_message(status_msg)
+                logger.info("Loading test images...")
+                
+                visualizer = ColorEnhancementVisualizer(
+                    figure_size_dimensions=(20, 10), 
+                    image_resolution_dpi=200
+                )
+                
+                processed_items: List[ProcessedItem] = []
+                total_images = len(image_files)
+                done_files: List[str] = []
+                
+                for idx, filename in enumerate(image_files):
+                    # Done / Processing / Wait
+                    wait_files = image_files[idx + 1:]
+                    status_msg = build_status_message(done_files, filename, wait_files)
+                    app.schedule_processing_message(status_msg)
+                    logger.info(f"[{idx+1}/{total_images}] Processing {filename}...")
                     
-                    # Load color image
+                    # Load and process the image
                     image_array = loader.load_single_color_image(filename)
                     
-                    # Process the image
                     results, resolved_gamma, comparison_path = process_single_color_image(
                         image_filename=filename,
                         image_array=image_array,
@@ -109,10 +157,8 @@ def main():
                     
                     # Create processed item for GUI
                     technique_desc = (
-                        "1. RGB Histogram Equalization (each channel independently)\n"
-                        "2. HSI Intensity Histogram Equalization (preserves Hue)\n"
-                        "3. HSI Intensity Gamma Correction (preserves Hue)\n"
-                        "4. HSI Saturation Enhancement (preserves Hue)"
+                        "RGB Hist.Eq. | HSI Intensity Hist.Eq. | "
+                        "HSI Gamma | HSI Saturation Enh."
                     )
                     
                     processed_item = ProcessedItem(
@@ -122,38 +168,41 @@ def main():
                         technique_description=technique_desc
                     )
                     processed_items.append(processed_item)
+                    done_files.append(filename)
+                    logger.info(f"  Completed {filename} with gamma={resolved_gamma:.3f}")
                     
-                    # Update GUI if running
-                    if hasattr(app, 'update_processed_items'):
-                        app.root.after(0, lambda items=processed_items.copy(): 
-                                       app.update_processed_items(items))
-                        app.root.after(0, lambda msg=f"Processed {filename}": 
-                                       app.append_log(msg))
-                    
-                except Exception as e:
-                    logger.error(f"Failed to process {filename}: {e}")
-                    if hasattr(app, 'append_log'):
-                        app.root.after(0, lambda err=str(e), fn=filename: 
-                                       app.append_log(f"ERROR: {fn} - {err}"))
-            
-            # Final update
-            if hasattr(app, 'set_processing_message'):
-                app.root.after(0, lambda: app.set_processing_message("All images processed!"))
-                app.root.after(0, lambda: app.append_log(f"Completed processing {len(processed_items)} images"))
-        
-        # Create GUI
-        app = ColorImageReviewApp(processed_items=None, gamma_value=gamma_value)
+                    app.schedule_processed_items(list(processed_items))
+                
+                # All processing complete
+                logger.info("=" * 50)
+                logger.info("All image processing completed successfully!")
+                logger.info(f"Results saved in '{results_dir}/' directory")
+                logger.info("=" * 50)
+                
+                app.schedule_processing_message(f"All {total_images} Images Complete")
+                
+            except Exception as e:
+                processing_error.set()
+                logger.error(f"Error during processing: {e}")
+                app.schedule_error(str(e))
         
         # Start processing in background thread
-        processing_thread = threading.Thread(target=process_images, daemon=True)
+        processing_thread = threading.Thread(target=processing_worker, daemon=True)
         processing_thread.start()
         
-        # Run GUI main loop
+        # Run GUI main loop (blocks until window is closed)
         app.run()
+        
+        # Cleanup
+        logging.getLogger().removeHandler(gui_handler)
+        gui_handler.close()
+        
+        if processing_error.is_set():
+            sys.exit(1)
         
     except Exception as e:
         logger.exception(f"Fatal error: {e}")
-        raise
+        sys.exit(1)
 
 
 def run_without_gui():
