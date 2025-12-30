@@ -23,26 +23,43 @@ class ColorEnhancementVisualizer:
 
     def display_complete_enhancement_results(self, image_filename, original_image,
                                              rgb_hist_eq_result, hsi_hist_eq_result,
+                                             hsi_intensity_contrast_result,
                                              hsi_gamma_result, hsi_saturation_result,
                                              gamma_value=1.0,
                                              figure_save_path=None, 
                                              display_plot_immediately=True):
-        """Display five color images (original + 4 enhanced) and their intensity histograms in a 2x5 grid."""
-        matplotlib_figure, subplot_axes = plt.subplots(2, 5, figsize=self.figure_size_dimensions)
+        """Display six color images (original + 5 enhanced) and their intensity histograms in a 2x6 grid."""
+        matplotlib_figure, subplot_axes = plt.subplots(2, 6, figsize=self.figure_size_dimensions)
         matplotlib_figure.suptitle(f'Color Image Enhancement Results - {image_filename}', fontsize=16)
         
         # Row 1: Images
         self.display_color_image_on_axes(subplot_axes[0, 0], original_image, 'Original Image')
         self.display_color_image_on_axes(subplot_axes[0, 1], rgb_hist_eq_result, 'RGB Hist. Eq.')
         self.display_color_image_on_axes(subplot_axes[0, 2], hsi_hist_eq_result, 'HSI Intensity Hist. Eq.')
-        self.display_color_image_on_axes(subplot_axes[0, 3], hsi_gamma_result, f'HSI Gamma (γ={gamma_value:.2f})')
-        self.display_color_image_on_axes(subplot_axes[0, 4], hsi_saturation_result, 'HSI Saturation Enh.')
+        self.display_color_image_on_axes(
+            subplot_axes[0, 3], hsi_intensity_contrast_result, 'HSI Intensity Contrast Stretch'
+        )
+        self.display_color_image_on_axes(subplot_axes[0, 4], hsi_gamma_result, f'HSI Gamma (γ={gamma_value:.2f})')
+        self.display_color_image_on_axes(subplot_axes[0, 5], hsi_saturation_result, 'HSI Saturation Enh.')
 
         # Row 2: Intensity Histograms
-        images_list = [original_image, rgb_hist_eq_result, hsi_hist_eq_result, hsi_gamma_result, hsi_saturation_result]
-        histogram_titles = ['Original Histogram', 'RGB Hist. Eq. Histogram', 
-                           'HSI Hist. Eq. Histogram', 'HSI Gamma Histogram', 'HSI Saturation Histogram']
-        histogram_colors = ['blue', 'green', 'red', 'orange', 'purple']
+        images_list = [
+            original_image,
+            rgb_hist_eq_result,
+            hsi_hist_eq_result,
+            hsi_intensity_contrast_result,
+            hsi_gamma_result,
+            hsi_saturation_result
+        ]
+        histogram_titles = [
+            'Original Histogram',
+            'RGB Hist. Eq. Histogram',
+            'HSI Hist. Eq. Histogram',
+            'HSI Intensity Contrast Histogram',
+            'HSI Gamma Histogram',
+            'HSI Saturation Histogram'
+        ]
+        histogram_colors = ['blue', 'green', 'red', 'brown', 'orange', 'purple']
         
         for i, (image, title, color) in enumerate(zip(images_list, histogram_titles, histogram_colors)):
             self.display_intensity_histogram_on_axes(subplot_axes[1, i], image, title, color)
