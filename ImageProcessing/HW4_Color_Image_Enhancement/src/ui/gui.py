@@ -174,8 +174,10 @@ class ColorImageReviewApp:
         self.image_status_var.set(f"Image {self.current_index + 1} of {len(self.processed_items)}")
 
         gamma_str = f"γ={item.gamma_value:.3f}" if item.gamma_value else "adaptive gamma"
-        technique_str = item.technique_description if item.technique_description else \
-            "RGB Histogram Eq., HSI Intensity Hist. Eq., HSI Gamma Correction, HSI Saturation Enhancement"
+        technique_str = item.technique_description if item.technique_description else (
+            "RGB Histogram Eq., HSI Intensity Hist. Eq., HSI Intensity Contrast Stretch, "
+            "HSI Gamma Correction, HSI Saturation Enhancement"
+        )
         self.detail_var.set(f"File: {item.filename} | {gamma_str} | Techniques: {technique_str}")
 
         if item.comparison_figure_path and os.path.exists(item.comparison_figure_path):

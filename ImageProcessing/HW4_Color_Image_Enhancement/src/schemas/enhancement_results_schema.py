@@ -19,10 +19,18 @@ class ColorEnhancementResultsSchema(BaseModel):
 
     rgb_histogram_eq: np.ndarray = Field(..., description="RGB histogram equalized image")
     hsi_histogram_eq: np.ndarray = Field(..., description="HSI intensity histogram equalized image")
+    hsi_intensity_contrast: np.ndarray = Field(..., description="HSI intensity contrast stretched image")
     hsi_gamma: np.ndarray = Field(..., description="HSI intensity gamma corrected image")
     hsi_saturation: np.ndarray = Field(..., description="HSI saturation enhanced image")
 
-    @field_validator('rgb_histogram_eq', 'hsi_histogram_eq', 'hsi_gamma', 'hsi_saturation', mode='before')
+    @field_validator(
+        'rgb_histogram_eq',
+        'hsi_histogram_eq',
+        'hsi_intensity_contrast',
+        'hsi_gamma',
+        'hsi_saturation',
+        mode='before'
+    )
     @classmethod
     def validate_array_contents(cls, v, info):
         field_name = info.field_name
@@ -41,7 +49,7 @@ class ColorEnhancementResultsSchema(BaseModel):
     @model_validator(mode='after')
     def ensure_matching_shapes(self):
         ref_shape = self.rgb_histogram_eq.shape
-        for field_name in ['hsi_histogram_eq', 'hsi_gamma', 'hsi_saturation']:
+        for field_name in ['hsi_histogram_eq', 'hsi_intensity_contrast', 'hsi_gamma', 'hsi_saturation']:
             field_value = getattr(self, field_name)
             if field_value.shape != ref_shape:
                 raise ValueError(
