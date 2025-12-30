@@ -158,7 +158,7 @@ def main():
                     # Create processed item for GUI
                     technique_desc = (
                         "RGB Hist.Eq. | HSI Intensity Hist.Eq. | "
-                        "HSI Gamma | HSI Saturation Enh."
+                        "HSI Intensity Contrast Stretch | HSI Gamma | HSI Saturation Enh."
                     )
                     
                     processed_item = ProcessedItem(

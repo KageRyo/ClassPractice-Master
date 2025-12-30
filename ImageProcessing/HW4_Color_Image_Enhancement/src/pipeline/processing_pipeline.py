@@ -130,6 +130,11 @@ def compute_color_enhancements(rgb_image, gamma_value, logger):
     logger.info(f"  Applying HSI intensity histogram equalization...")
     hsi_hist_eq = pipeline.enhance_in_hsi_space(rgb_image, 'intensity_histogram_eq')
     
+    logger.info(f"  Applying HSI intensity contrast stretching...")
+    hsi_intensity_contrast = pipeline.enhance_in_hsi_space(
+        rgb_image, 'intensity_contrast_stretch', low_percentile=1, high_percentile=99
+    )
+
     logger.info(f"  Applying HSI intensity gamma correction (gamma={gamma_value:.3f})...")
     hsi_gamma = pipeline.enhance_in_hsi_space(rgb_image, 'intensity_gamma', gamma=gamma_value)
     
@@ -139,6 +144,7 @@ def compute_color_enhancements(rgb_image, gamma_value, logger):
     return ColorEnhancementResultsSchema(
         rgb_histogram_eq=rgb_hist_eq,
         hsi_histogram_eq=hsi_hist_eq,
+        hsi_intensity_contrast=hsi_intensity_contrast,
         hsi_gamma=hsi_gamma,
         hsi_saturation=hsi_saturation
     )
@@ -161,6 +167,7 @@ def visualize_color_results(image_filename: str,
         original_image=original_image,
         rgb_hist_eq_result=results.rgb_histogram_eq,
         hsi_hist_eq_result=results.hsi_histogram_eq,
+        hsi_intensity_contrast_result=results.hsi_intensity_contrast,
         hsi_gamma_result=results.hsi_gamma,
         hsi_saturation_result=results.hsi_saturation,
         gamma_value=gamma_value,
@@ -177,6 +184,9 @@ def save_color_results(image_filename: str,
     base_name = os.path.splitext(image_filename)[0]
     loader.save_color_image_array(results.rgb_histogram_eq, f'{base_name}_rgb_hist_eq.png')
     loader.save_color_image_array(results.hsi_histogram_eq, f'{base_name}_hsi_hist_eq.png')
+    loader.save_color_image_array(
+        results.hsi_intensity_contrast, f'{base_name}_hsi_intensity_contrast_stretch.png'
+    )
     loader.save_color_image_array(results.hsi_gamma, f'{base_name}_hsi_gamma.png')
     loader.save_color_image_array(results.hsi_saturation, f'{base_name}_hsi_saturation.png')
 
