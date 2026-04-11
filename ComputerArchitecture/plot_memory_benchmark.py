@@ -6,6 +6,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 
+DISPLAY_MIN_NS = 1.0
+CPU_INFO = "Intel Core i5-14500"
+MEM_INFO = "L1=32~48KB, L2=11.5MB, L3=24MB, RAM=8GB"
+
+
 def parse_size_token(token: str) -> int:
     """Convert labels like 512B, 16K, 24M, 1G to bytes."""
     token = token.strip().upper()
@@ -125,21 +130,29 @@ def plot_lines_by_array_size(stride_bytes, array_labels, matrix, out_path: Path)
     x = stride_bytes
 
     for row_label, y in zip(array_labels, matrix):
-        ax.plot(x, y, marker="o", linewidth=1.2, markersize=3, label=row_label)
+        # Clamp display floor to 1ns so the log-scale plot matches textbook-style readability.
+        ys = [max(vy, DISPLAY_MIN_NS) if math.isfinite(vy) else float("nan") for vy in y]
+        ax.plot(x, ys, marker="o", linewidth=1.1, markersize=3, label=row_label)
 
     ax.set_xscale("log", base=2)
     ax.set_yscale("log")
     ax.set_xlabel("Stride Bytes (log2 scale)")
     ax.set_ylabel("Latency (ns/load, log scale)")
-    ax.set_title("Latency vs Stride (Log-Log, Grouped by Array Size)")
+    ax.set_title(f"Elapsed Time vs Stride (Log-Log)\n{CPU_INFO} | {MEM_INFO}")
+    ax.set_ylim(bottom=DISPLAY_MIN_NS)
 
     # Keep readable tick labels on x-axis while using log2 spacing.
     ax.set_xticks(stride_bytes)
     ax.set_xticklabels([bytes_to_label(b) for b in stride_bytes], rotation=45, ha="right")
 
-    # Avoid unreadable legends with too many lines.
-    if len(array_labels) <= 12:
-        ax.legend(title="Array Size", fontsize=8)
+    ax.legend(
+        title="Array Size",
+        fontsize=7,
+        title_fontsize=9,
+        loc="upper right",
+        ncol=2,
+        frameon=True,
+    )
 
     ax.grid(True, alpha=0.25)
     fig.tight_layout()
