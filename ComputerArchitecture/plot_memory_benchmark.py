@@ -122,14 +122,20 @@ def plot_heatmap(stride_bytes, array_bytes, matrix, out_path: Path):
 def plot_lines_by_array_size(stride_bytes, array_labels, matrix, out_path: Path):
     fig, ax = plt.subplots(figsize=(11, 7))
 
-    x = [safe_log2(b) for b in stride_bytes]
+    x = stride_bytes
 
     for row_label, y in zip(array_labels, matrix):
         ax.plot(x, y, marker="o", linewidth=1.2, markersize=3, label=row_label)
 
-    ax.set_xlabel("log2(Stride Bytes)")
-    ax.set_ylabel("Latency (ns/load)")
-    ax.set_title("Latency vs Stride (Grouped by Array Size)")
+    ax.set_xscale("log", base=2)
+    ax.set_yscale("log")
+    ax.set_xlabel("Stride Bytes (log2 scale)")
+    ax.set_ylabel("Latency (ns/load, log scale)")
+    ax.set_title("Latency vs Stride (Log-Log, Grouped by Array Size)")
+
+    # Keep readable tick labels on x-axis while using log2 spacing.
+    ax.set_xticks(stride_bytes)
+    ax.set_xticklabels([bytes_to_label(b) for b in stride_bytes], rotation=45, ha="right")
 
     # Avoid unreadable legends with too many lines.
     if len(array_labels) <= 12:
