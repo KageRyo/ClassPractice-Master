@@ -3,21 +3,21 @@
 #include <windows.h>
 
 /*
- * i7-10700
+ * Intel Core i5-14500
  *
- * L1 Data Cache = 32KB/core  -> ARRAY_MIN = 2048  (= 8KB, 遠小於 L1)
- * L2 Cache      = 256KB/core -> 需測到 512KB+ 才看出 L2 miss
- * L3 Cache      = 16MB shared -> 需測到 32MB+ 才看出 L3 miss
- * RAM           = 16GB       -> 不需測到超過 RAM
+ * L1 Data Cache = 32KB~48KB/core -> ARRAY_MIN = 4096 (= 16KB, 遠小於 L1)
+ * L2 Cache      = 11.5MB total   -> 需測到 16MB+ 才容易看出 L2/L3 過渡
+ * L3 Cache      = 24MB shared    -> 需測到 48MB+ 才明顯看出 L3 miss
+ * RAM           = 8GB            -> 不需測到超過 RAM
  * TLB           = ~256KB-6MB 覆蓋範圍 (4KB pages)
  *
- * ARRAY_MAX = 8M integers = 32MB, 足以超過 L3
- * 每組測 5 秒（而非 20 秒），總執行時間約 20-30 分鐘
+ * ARRAY_MAX = 16M integers = 64MB, 足以超過 L3 24MB
+ * 每組測 4 秒，總執行時間約 20-30 分鐘
  */
 
-#define ARRAY_MIN  (2048)            // 8KB, 遠小於 L1 32KB
-#define ARRAY_MAX  (8 * 1024 * 1024) // 8M ints = 32MB, 超過 L3 16MB
-#define MEASURE_SECS  5.0            // 每組收集秒數
+#define ARRAY_MIN  (4096)              // 16KB, 遠小於 L1
+#define ARRAY_MAX  (16 * 1024 * 1024)  // 16M ints = 64MB, 超過 L3 24MB
+#define MEASURE_SECS  4.0              // 每組收集秒數
 
 int x[ARRAY_MAX];
 
@@ -44,8 +44,8 @@ int main() {
     double steps, tsteps;
     double loadtime, sec0, sec1, sec, lastsec;
 
-    fprintf(stderr, "=== Memory Benchmark for i7-10700 ===\n");
-    fprintf(stderr, "L1=32KB  L2=256KB  L3=16MB  RAM=16GB\n");
+    fprintf(stderr, "=== Memory Benchmark for i5-14500 ===\n");
+    fprintf(stderr, "L1=32~48KB  L2=11.5MB  L3=24MB  RAM=8GB\n");
     fprintf(stderr, "Each config measured for %.0f seconds.\n", MEASURE_SECS);
     fprintf(stderr, "Please close other applications for best results.\n");
     fprintf(stderr, "Estimated time: 20-30 minutes\n\n");
