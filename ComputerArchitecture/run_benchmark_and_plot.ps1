@@ -3,7 +3,8 @@ param(
     [string]$Exe = "HW2_2.25.exe",
     [string]$Csv = "memory_benchmark.csv",
     [string]$Log = "memory_benchmark.log",
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    [switch]$NoOpt
 )
 
 $ErrorActionPreference = "Stop"
@@ -51,7 +52,9 @@ if (-not (Test-Path $plotScript)) {
 }
 
 Write-Host "[2/4] Compiling benchmark..."
-& gcc $sourcePath -O2 -o $exePath
+$optFlag = if ($NoOpt) { "-O0" } else { "-O2" }
+Write-Host "Using optimization flag: $optFlag"
+& gcc $sourcePath $optFlag -o $exePath
 if ($LASTEXITCODE -ne 0) {
     throw "Compilation failed."
 }

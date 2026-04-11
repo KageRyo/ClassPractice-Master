@@ -20,6 +20,7 @@
 #define MEASURE_SECS  4.0              // 每組收集秒數
 
 int x[ARRAY_MAX];
+volatile int benchmark_sink = 0;
 
 double get_seconds() {
     LARGE_INTEGER cnt, freq;
@@ -82,6 +83,7 @@ int main() {
                 for (i = stride; i != 0; i--) {
                     nextstep = 0;
                     do { nextstep = x[nextstep]; } while (nextstep != 0);
+                    benchmark_sink ^= nextstep;
                 }
                 steps += 1.0;
                 sec1 = get_seconds();
@@ -94,6 +96,7 @@ int main() {
                 for (i = stride; i != 0; i--) {
                     index = 0;
                     do { index += stride; } while (index < csize);
+                    benchmark_sink ^= index;
                 }
                 tsteps += 1.0;
                 sec1 = get_seconds();
@@ -108,5 +111,7 @@ int main() {
     }
 
     fprintf(stderr, "\nDone! Output saved to CSV.\n");
+    if (benchmark_sink == -1)
+        fprintf(stderr, "benchmark_sink=%d\n", benchmark_sink);
     return 0;
 }

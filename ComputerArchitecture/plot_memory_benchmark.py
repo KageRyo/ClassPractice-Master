@@ -160,6 +160,33 @@ def plot_lines_by_array_size(stride_bytes, array_labels, matrix, out_path: Path)
     plt.close(fig)
 
 
+def plot_textbook_style(stride_labels, array_labels, matrix, out_path: Path):
+    fig, ax = plt.subplots(figsize=(11, 7))
+
+    # Textbook-like view: x as array-size categories, y as linear latency.
+    x = list(range(len(array_labels)))
+    target_strides = ["16B", "64B", "256B", "1K"]
+
+    for stride_label in target_strides:
+        if stride_label not in stride_labels:
+            continue
+        col_idx = stride_labels.index(stride_label)
+        y = [matrix[row_idx][col_idx] for row_idx in range(len(array_labels))]
+        ax.plot(x, y, marker="o", linewidth=1.4, markersize=4, label=f"Stride {stride_label}")
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(array_labels, rotation=45, ha="right")
+    ax.set_xlabel("Array Size")
+    ax.set_ylabel("Latency (ns/load)")
+    ax.set_title(f"Memory Access Latency (Textbook Style)\n{CPU_INFO} | {MEM_INFO}")
+    ax.legend(title="Stride Size", fontsize=9, title_fontsize=10)
+    ax.grid(True, alpha=0.3, axis="y")
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+
+
 def main():
     if len(sys.argv) != 2:
         print("Usage: python plot_memory_benchmark.py <memory_benchmark.csv>")
@@ -171,16 +198,19 @@ def main():
 
     outdir = csv_path.parent
 
-    _, stride_bytes, array_labels, array_bytes, matrix = read_benchmark_csv(csv_path)
+    stride_labels, stride_bytes, array_labels, array_bytes, matrix = read_benchmark_csv(csv_path)
 
     heatmap_path = outdir / "memory_heatmap.png"
     lines_path = outdir / "memory_lines_by_array_size.png"
+    textbook_path = outdir / "memory_textbook_style.png"
 
     plot_heatmap(stride_bytes, array_bytes, matrix, heatmap_path)
     plot_lines_by_array_size(stride_bytes, array_labels, matrix, lines_path)
+    plot_textbook_style(stride_labels, array_labels, matrix, textbook_path)
 
     print(f"Saved: {heatmap_path}")
     print(f"Saved: {lines_path}")
+    print(f"Saved: {textbook_path}")
 
 
 if __name__ == "__main__":
