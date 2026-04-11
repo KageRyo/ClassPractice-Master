@@ -1,7 +1,0 @@
-=== Memory Benchmark for i5-14500 ===
-L1=32~48KB  L2=11.5MB  L3=24MB  RAM=8GB
-Each config measured for 4 seconds.
-Please close other applications for best results.
-Estimated time: 20-30 minutes
-
-  Testing array size = 16KB ...
