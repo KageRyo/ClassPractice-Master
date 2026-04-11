@@ -53,8 +53,13 @@ if ((-not $SkipInstall) -and (Test-Path $requirements)) {
 }
 
 Write-Host "[4/4] Running benchmark and plotting..."
+# The benchmark intentionally writes progress to stderr; do not treat native stderr as terminating.
+$oldNativeErrorPref = $PSNativeCommandUseErrorActionPreference
+$PSNativeCommandUseErrorActionPreference = $false
 & $exePath 1> $csvPath 2> $logPath
-if ($LASTEXITCODE -ne 0) {
+$benchmarkExitCode = $LASTEXITCODE
+$PSNativeCommandUseErrorActionPreference = $oldNativeErrorPref
+if ($benchmarkExitCode -ne 0) {
     throw "Benchmark execution failed."
 }
 
