@@ -53,13 +53,10 @@ if ((-not $SkipInstall) -and (Test-Path $requirements)) {
 }
 
 Write-Host "[4/4] Running benchmark and plotting..."
-# The benchmark intentionally writes progress to stderr; do not treat native stderr as terminating.
-$oldNativeErrorPref = $PSNativeCommandUseErrorActionPreference
-$PSNativeCommandUseErrorActionPreference = $false
-& $exePath 1> $csvPath 2> $logPath
-$benchmarkExitCode = $LASTEXITCODE
-$PSNativeCommandUseErrorActionPreference = $oldNativeErrorPref
-if ($benchmarkExitCode -ne 0) {
+# Run through cmd so benchmark stderr goes to log without becoming a PowerShell error record.
+$cmdLine = '"{0}" 1> "{1}" 2> "{2}"' -f $exePath, $csvPath, $logPath
+cmd /c $cmdLine
+if ($LASTEXITCODE -ne 0) {
     throw "Benchmark execution failed."
 }
 
