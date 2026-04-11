@@ -20,6 +20,20 @@ $logPath = Join-Path $scriptDir $Log
 Write-Host "[1/4] Checking tools..."
 $gccCmd = Get-Command gcc -ErrorAction SilentlyContinue
 if (-not $gccCmd) {
+    $msysBins = @(
+        "C:\msys64\ucrt64\bin",
+        "C:\msys64\mingw64\bin",
+        "C:\msys64\clang64\bin"
+    )
+    foreach ($bin in $msysBins) {
+        if (Test-Path (Join-Path $bin "gcc.exe")) {
+            $env:Path = "$bin;" + $env:Path
+            break
+        }
+    }
+    $gccCmd = Get-Command gcc -ErrorAction SilentlyContinue
+}
+if (-not $gccCmd) {
     throw "gcc not found. Please install MinGW-w64 or MSYS2 and ensure gcc is in PATH."
 }
 
