@@ -212,13 +212,13 @@ def estimate_tlb_entries_and_penalty(array_bytes, stride_bytes, matrix, page_str
     if len(pages) < 4:
         return col_idx, None, None
 
-    # Knee: strongest multiplicative rise between neighboring points.
+    # Knee: detect first sustained jump, but do not discard the sub-64-page region
+    # because many CPUs have L1 DTLB around this scale.
     first_significant_knee = None
     best_knee_i = None
     best_score = 0.0
     for i in range(1, len(latencies)):
-        # Ignore very small page working sets that are dominated by cache effects.
-        if pages[i] < 64:
+        if pages[i] < 4:
             continue
         prev_v = latencies[i - 1]
         cur_v = latencies[i]
@@ -226,7 +226,7 @@ def estimate_tlb_entries_and_penalty(array_bytes, stride_bytes, matrix, page_str
             continue
         ratio = cur_v / prev_v
         delta = cur_v - prev_v
-        if first_significant_knee is None and ratio >= 1.5 and delta >= 1.0:
+        if first_significant_knee is None and ratio >= 1.35 and delta >= 0.8:
             first_significant_knee = i
         score = (ratio - 1.0) * cur_v
         if score > best_score:
@@ -254,9 +254,9 @@ def estimate_tlb_entries_and_penalty(array_bytes, stride_bytes, matrix, page_str
     return col_idx, tlb_entries_est, penalty
 
 
-def estimate_tlb_associativity(ways, series) -> int | None:
+def estimate_tlb_associativity(ways, series) -> tuple[int | None, int | None]:
     if not ways or not series:
-        return None
+        return None, None
 
     avg_latency = []
     for i in range(len(ways)):
@@ -268,29 +268,33 @@ def estimate_tlb_associativity(ways, series) -> int | None:
 
     finite_pairs = [(w, v) for w, v in zip(ways, avg_latency) if is_finite_number(v)]
     if len(finite_pairs) < 4:
-        return None
+        return None, None
 
     # Ignore the very first points, which can be noisy due to tiny loop bodies.
     candidate_pairs = [pair for pair in finite_pairs if pair[0] >= 6]
     if len(candidate_pairs) < 3:
         candidate_pairs = finite_pairs
 
-    # Detect first stable jump. If transition happens at way N,
+    # Detect sustained jumps. If transition happens at way N,
     # associativity is approximately (N - 1)-way.
-    jump_way = None
+    jump_ways = []
     for i in range(1, len(candidate_pairs) - 1):
         w, cur_v = candidate_pairs[i]
         _, prev_v = candidate_pairs[i - 1]
         _, next_v = candidate_pairs[i + 1]
         delta = cur_v - prev_v
         if delta >= 1.0 and cur_v >= prev_v * 1.25 and next_v >= prev_v * 1.20:
-            jump_way = w
-            break
+            jump_ways.append(w)
 
-    if jump_way is not None and jump_way >= 2:
-        return jump_way - 1
+    if not jump_ways:
+        return None, None
 
-    return None
+    l1_assoc = jump_ways[0] - 1 if jump_ways[0] >= 2 else None
+    l2_assoc = None
+    if len(jump_ways) >= 2 and jump_ways[1] >= 2:
+        l2_assoc = jump_ways[1] - 1
+
+    return l1_assoc, l2_assoc
 
 
 def plot_heatmap(stride_bytes, array_bytes, matrix, out_path: Path):
@@ -477,15 +481,17 @@ def plot_tlb_associativity_probe(stride_bytes, array_labels, array_bytes, matrix
     plt.close(fig)
 
 
-def plot_tlb_associativity_conflict(stride_labels, ways, series, assoc_est, out_path: Path):
+def plot_tlb_associativity_conflict(stride_labels, ways, series, l1_assoc_est, l2_assoc_est, out_path: Path):
     fig, ax = plt.subplots(figsize=(11, 7))
 
     for label in stride_labels:
         y = [max(v, DISPLAY_MIN_NS) if is_finite_number(v) else float("nan") for v in series[label]]
         ax.plot(ways, y, marker="o", linewidth=1.4, markersize=4, label=f"Stride {label}")
 
-    if assoc_est is not None:
-        ax.axvline(assoc_est, color="green", linestyle="--", linewidth=1.3, label=f"Estimated associativity: {assoc_est}-way")
+    if l1_assoc_est is not None:
+        ax.axvline(l1_assoc_est + 1, color="green", linestyle="--", linewidth=1.3, label=f"L1 jump at way {l1_assoc_est + 1} (~{l1_assoc_est}-way)")
+    if l2_assoc_est is not None:
+        ax.axvline(l2_assoc_est + 1, color="orange", linestyle="--", linewidth=1.3, label=f"L2 jump at way {l2_assoc_est + 1} (~{l2_assoc_est}-way)")
 
     ax.set_xlabel("Ways Needed (pages mapped to same TLB set)")
     ax.set_ylabel("Latency (ns/access)")
@@ -498,7 +504,7 @@ def plot_tlb_associativity_conflict(stride_labels, ways, series, assoc_est, out_
     plt.close(fig)
 
 
-def write_tlb_summary(out_path: Path, page_stride_bytes: int, tlb_entries_est, tlb_miss_penalty_est, tlb_assoc_est):
+def write_tlb_summary(out_path: Path, page_stride_bytes: int, tlb_entries_est, tlb_miss_penalty_est, tlb_l1_assoc_est, tlb_l2_assoc_est):
     lines = [
         "TLB Analysis Summary (heuristic)",
         "================================",
@@ -515,10 +521,15 @@ def write_tlb_summary(out_path: Path, page_stride_bytes: int, tlb_entries_est, t
     else:
         lines.append(f"Estimated TLB miss penalty: ~{tlb_miss_penalty_est:.2f} ns/load")
 
-    if tlb_assoc_est is None:
-        lines.append("Estimated TLB associativity: inconclusive (please run dedicated conflict benchmark)")
+    if tlb_l1_assoc_est is None:
+        lines.append("Estimated L1 TLB associativity: inconclusive")
     else:
-        lines.append(f"Estimated TLB associativity: ~{tlb_assoc_est}-way")
+        lines.append(f"Estimated L1 TLB associativity: ~{tlb_l1_assoc_est}-way")
+
+    if tlb_l2_assoc_est is None:
+        lines.append("Estimated L2/STLB associativity: inconclusive")
+    else:
+        lines.append(f"Estimated L2/STLB associativity: ~{tlb_l2_assoc_est}-way")
 
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -563,15 +574,17 @@ def main():
     plot_tlb_entries_probe(array_bytes, stride_bytes, matrix, page_stride_bytes, entries_probe_path)
     plot_tlb_associativity_probe(stride_bytes, array_labels, array_bytes, matrix, page_stride_bytes, assoc_probe_path)
 
-    tlb_assoc_est = None
+    tlb_l1_assoc_est = None
+    tlb_l2_assoc_est = None
     if assoc_csv_path.exists():
         stride_labels_assoc, ways_assoc, series_assoc = read_tlb_assoc_csv(assoc_csv_path)
-        tlb_assoc_est = estimate_tlb_associativity(ways_assoc, series_assoc)
+        tlb_l1_assoc_est, tlb_l2_assoc_est = estimate_tlb_associativity(ways_assoc, series_assoc)
         plot_tlb_associativity_conflict(
             stride_labels_assoc,
             ways_assoc,
             series_assoc,
-            tlb_assoc_est,
+            tlb_l1_assoc_est,
+            tlb_l2_assoc_est,
             assoc_conflict_path,
         )
 
@@ -580,7 +593,8 @@ def main():
         page_stride_bytes,
         tlb_entries_est,
         tlb_miss_penalty_est,
-        tlb_assoc_est,
+        tlb_l1_assoc_est,
+        tlb_l2_assoc_est,
     )
 
     print(f"Saved: {heatmap_path}")

@@ -28,6 +28,14 @@
 int x[ARRAY_MAX];
 volatile int benchmark_sink = 0;
 
+void pin_thread_to_core0(void) {
+    HANDLE thread = GetCurrentThread();
+    DWORD_PTR prev_mask = SetThreadAffinityMask(thread, (DWORD_PTR)1);
+    if (prev_mask == 0) {
+        fprintf(stderr, "Warning: failed to set CPU affinity.\n");
+    }
+}
+
 double get_seconds() {
     LARGE_INTEGER cnt, freq;
     QueryPerformanceCounter(&cnt);
@@ -48,9 +56,11 @@ void label(int bytes) {
 
 double measure_pointer_chase_ns_per_access(int start_index, int access_count, double measure_secs) {
     int i, nextstep;
-    double steps, sec0, sec1, sec, tsteps;
+    double sec0, sec1, sec;
+    unsigned long long steps;
+    unsigned long long k;
 
-    steps = 0.0;
+    steps = 0;
     sec0 = get_seconds();
     do {
         nextstep = start_index;
@@ -58,28 +68,26 @@ double measure_pointer_chase_ns_per_access(int start_index, int access_count, do
             nextstep = x[nextstep];
         } while (nextstep != start_index);
         benchmark_sink ^= nextstep;
-        steps += 1.0;
+        steps += 1;
         sec1 = get_seconds();
     } while ((sec1 - sec0) < measure_secs);
     sec = sec1 - sec0;
 
     /* Time-loop overhead subtraction. */
-    tsteps = 0.0;
     sec0 = get_seconds();
-    do {
+    for (k = 0; k < steps; k++) {
         nextstep = start_index;
         for (i = 0; i < access_count; i++) {
             nextstep += 1;
         }
         benchmark_sink ^= nextstep;
-        tsteps += 1.0;
-        sec1 = get_seconds();
-    } while (tsteps < steps);
+    }
+    sec1 = get_seconds();
     sec -= (sec1 - sec0);
 
     if (sec < 0.0)
         sec = 0.0;
-    return (sec * 1e9) / (steps * (double)access_count);
+    return (sec * 1e9) / ((double)steps * (double)access_count);
 }
 
 void run_tlb_associativity_benchmark(const char *out_csv) {
@@ -110,6 +118,7 @@ void run_tlb_associativity_benchmark(const char *out_csv) {
         for (s = 0; s < stride_count; s++) {
             int stride_pages = stride_pages_list[s];
             int stride_elems = stride_pages * PAGE_ELEMS;
+            int start_index;
             double ns_per_access;
 
             for (w = 0; w < ways; w++) {
@@ -123,7 +132,8 @@ void run_tlb_associativity_benchmark(const char *out_csv) {
                 x[cur] = next;
             }
 
-            ns_per_access = measure_pointer_chase_ns_per_access(0, ways, TLB_ASSOC_MEASURE_SECS);
+            start_index = ((ways / 2) % ways) * stride_elems;
+            ns_per_access = measure_pointer_chase_ns_per_access(start_index, ways, TLB_ASSOC_MEASURE_SECS);
             if (ns_per_access < 0.1)
                 ns_per_access = 0.1;
             fprintf(fp, ",%.3f", ns_per_access);
@@ -136,8 +146,11 @@ void run_tlb_associativity_benchmark(const char *out_csv) {
 
 int main(int argc, char **argv) {
     int nextstep, i, index, stride, csize;
-    double steps, tsteps;
+    unsigned long long steps;
+    unsigned long long k;
     double loadtime, sec0, sec1, sec, lastsec;
+
+    pin_thread_to_core0();
 
     if (argc > 1 && strcmp(argv[1], "--tlb-assoc-only") == 0) {
         run_tlb_associativity_benchmark("tlb_assoc_benchmark.csv");
@@ -168,15 +181,19 @@ int main(int argc, char **argv) {
         label(csize * (int)sizeof(int));
 
         for (stride = 1; stride <= csize / 2; stride *= 2) {
+            int prev;
 
-            for (index = 0; index < csize; index += stride)
-                x[index] = index + stride;
-            x[index - stride] = 0;
+            prev = 0;
+            for (index = stride; index < csize; index += stride) {
+                x[prev] = index;
+                prev = index;
+            }
+            x[prev] = 0;
 
             lastsec = get_seconds();
             do { sec0 = get_seconds(); } while (sec0 == lastsec);
 
-            steps = 0.0;
+            steps = 0;
             nextstep = 0;
             sec0 = get_seconds();
             do {
@@ -185,25 +202,23 @@ int main(int argc, char **argv) {
                     do { nextstep = x[nextstep]; } while (nextstep != 0);
                     benchmark_sink ^= nextstep;
                 }
-                steps += 1.0;
+                steps += 1;
                 sec1 = get_seconds();
             } while ((sec1 - sec0) < MEASURE_SECS);
             sec = sec1 - sec0;
 
-            tsteps = 0.0;
             sec0 = get_seconds();
-            do {
+            for (k = 0; k < steps; k++) {
                 for (i = stride; i != 0; i--) {
                     index = 0;
                     do { index += stride; } while (index < csize);
                     benchmark_sink ^= index;
                 }
-                tsteps += 1.0;
-                sec1 = get_seconds();
-            } while (tsteps < steps);
+            }
+            sec1 = get_seconds();
             sec -= (sec1 - sec0);
 
-            loadtime = (sec * 1e9) / (steps * (double)csize);
+            loadtime = (sec * 1e9) / ((double)steps * (double)csize);
             printf("%4.1f,", (loadtime < 0.1) ? 0.1 : loadtime);
         }
         printf("\n");

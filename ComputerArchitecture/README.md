@@ -28,17 +28,18 @@ a. 系統 page size 為 **4 KB**。
 對應圖：`tlb_page_size_probe.png`  
 依據：在大工作集下，stride 到 4KB 附近出現明顯轉折。
 
-b. TLB entries 約為 **512 entries**（以 stride = 1 page 時，工作集跨頁數的轉折點估計）。  
+b. **實驗觀測的有效條目數約為 512（effective entries）**，不是直接等同硬體規格值。  
 對應圖：`tlb_entries_probe.png`  
-依據：Pages touched 增加到約 512 時，延遲曲線有主要膝點。
+依據：Pages touched 增加到約 512 時，延遲曲線出現主要膝點。  
+補充：i5-14500 常見規格為 L1 DTLB 約 64、STLB 約 2048；本實驗值 512 反映的是此存取模式下的「有效覆蓋量」，可能混合多層 TLB 與 cache 影響。
 
 c. TLB miss penalty 約為 **14.86 ns/access**（以 TLB 命中區與未命中區平均延遲差估計）。  
 對應圖：`tlb_entries_probe.png`、`tlb_analysis_summary.txt`  
 依據：TLB miss 區與 hit 區的平均延遲差。
 
-d. TLB associativity 以目前完成實測推估約為 **6-way**。  
+d. **本實驗觀測到兩段轉折：第一段約 7（對應約 6-way），第二段約 13（對應約 12-way）**。  
 對應圖：`tlb_associativity_conflict.png`、`tlb_assoc_benchmark.csv`  
-說明：本次完整資料第一個穩定轉折出現在 way=7（依 N-1 規則得 6-way）；另在 13 附近仍可見第二段上升，可能是更高層 TLB 的影響。
+說明：若用 N-1 規則，第一轉折給 6-way、第二轉折給 12-way。由於 i5-14500 已知 STLB 為 12-way，第二段與規格更一致；第一段可能是 L1/量測噪聲/混合效應。
 
 ## 圖表說明（如何對應題目）
 
