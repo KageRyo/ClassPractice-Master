@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <windows.h>
 
 /*
@@ -18,6 +19,11 @@
 #define ARRAY_MIN  (4096)              // 16KB, 遠小於 L1
 #define ARRAY_MAX  (16 * 1024 * 1024)  // 16M ints = 64MB, 超過 L3 24MB
 #define MEASURE_SECS  4.0              // 每組收集秒數
+
+#define PAGE_BYTES 4096
+#define PAGE_ELEMS (PAGE_BYTES / (int)sizeof(int))
+#define TLB_ASSOC_MEASURE_SECS 1.0
+#define TLB_ASSOC_MAX_WAYS 24
 
 int x[ARRAY_MAX];
 volatile int benchmark_sink = 0;
@@ -40,10 +46,104 @@ void label(int bytes) {
         printf("%dG,", bytes / 1073741824);
 }
 
-int main() {
+double measure_pointer_chase_ns_per_access(int start_index, int access_count, double measure_secs) {
+    int i, nextstep;
+    double steps, sec0, sec1, sec, tsteps;
+
+    steps = 0.0;
+    sec0 = get_seconds();
+    do {
+        nextstep = start_index;
+        do {
+            nextstep = x[nextstep];
+        } while (nextstep != start_index);
+        benchmark_sink ^= nextstep;
+        steps += 1.0;
+        sec1 = get_seconds();
+    } while ((sec1 - sec0) < measure_secs);
+    sec = sec1 - sec0;
+
+    /* Time-loop overhead subtraction. */
+    tsteps = 0.0;
+    sec0 = get_seconds();
+    do {
+        nextstep = start_index;
+        for (i = 0; i < access_count; i++) {
+            nextstep += 1;
+        }
+        benchmark_sink ^= nextstep;
+        tsteps += 1.0;
+        sec1 = get_seconds();
+    } while (tsteps < steps);
+    sec -= (sec1 - sec0);
+
+    if (sec < 0.0)
+        sec = 0.0;
+    return (sec * 1e9) / (steps * (double)access_count);
+}
+
+void run_tlb_associativity_benchmark(const char *out_csv) {
+    FILE *fp;
+    int stride_pages_list[] = {16, 32, 64, 128};
+    int stride_count = (int)(sizeof(stride_pages_list) / sizeof(stride_pages_list[0]));
+    int ways, s, w;
+
+    fp = fopen(out_csv, "w");
+    if (!fp) {
+        fprintf(stderr, "Warning: cannot open %s for writing, skip TLB associativity benchmark.\n", out_csv);
+        return;
+    }
+
+    fprintf(stderr, "\n=== TLB Associativity Conflict Benchmark ===\n");
+    fprintf(stderr, "Stride in page multiples: 16, 32, 64, 128 pages\n");
+    fprintf(stderr, "Output: %s\n", out_csv);
+
+    fprintf(fp, "ways");
+    for (s = 0; s < stride_count; s++)
+        fprintf(fp, ",%dp", stride_pages_list[s]);
+    fprintf(fp, "\n");
+
+    for (ways = 1; ways <= TLB_ASSOC_MAX_WAYS; ways++) {
+        fprintf(stderr, "  TLB conflict ways = %d ...\n", ways);
+        fprintf(fp, "%d", ways);
+
+        for (s = 0; s < stride_count; s++) {
+            int stride_pages = stride_pages_list[s];
+            int stride_elems = stride_pages * PAGE_ELEMS;
+            double ns_per_access;
+
+            for (w = 0; w < ways; w++) {
+                int cur = w * stride_elems;
+                int next = ((w + 1) % ways) * stride_elems;
+                if (cur >= ARRAY_MAX || next >= ARRAY_MAX) {
+                    fprintf(stderr, "Warning: index out of range in TLB benchmark, reduce settings.\n");
+                    fclose(fp);
+                    return;
+                }
+                x[cur] = next;
+            }
+
+            ns_per_access = measure_pointer_chase_ns_per_access(0, ways, TLB_ASSOC_MEASURE_SECS);
+            if (ns_per_access < 0.1)
+                ns_per_access = 0.1;
+            fprintf(fp, ",%.3f", ns_per_access);
+        }
+        fprintf(fp, "\n");
+    }
+
+    fclose(fp);
+}
+
+int main(int argc, char **argv) {
     int nextstep, i, index, stride, csize;
     double steps, tsteps;
     double loadtime, sec0, sec1, sec, lastsec;
+
+    if (argc > 1 && strcmp(argv[1], "--tlb-assoc-only") == 0) {
+        run_tlb_associativity_benchmark("tlb_assoc_benchmark.csv");
+        fprintf(stderr, "Done! TLB associativity CSV saved.\n");
+        return 0;
+    }
 
     fprintf(stderr, "=== Memory Benchmark for i5-14500 ===\n");
     fprintf(stderr, "L1=32~48KB  L2=11.5MB  L3=24MB  RAM=8GB\n");
@@ -111,6 +211,8 @@ int main() {
     }
 
     fprintf(stderr, "\nDone! Output saved to CSV.\n");
+    run_tlb_associativity_benchmark("tlb_assoc_benchmark.csv");
+
     if (benchmark_sink == -1)
         fprintf(stderr, "benchmark_sink=%d\n", benchmark_sink);
     return 0;
