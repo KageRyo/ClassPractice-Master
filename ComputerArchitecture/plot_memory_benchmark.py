@@ -193,7 +193,7 @@ def detect_page_stride(stride_bytes, array_bytes, matrix) -> int:
 
 def estimate_tlb_entries_and_penalty(array_bytes, stride_bytes, matrix, page_stride_bytes: int):
     if not array_bytes or not stride_bytes or not matrix:
-        return None, None, None
+        return None, None, None, None, None, None
 
     # Use the column nearest to page-sized stride.
     col_idx = min(range(len(stride_bytes)), key=lambda i: abs(stride_bytes[i] - page_stride_bytes))
@@ -210,13 +210,9 @@ def estimate_tlb_entries_and_penalty(array_bytes, stride_bytes, matrix, page_str
         latencies.append(v)
 
     if len(pages) < 4:
-        return col_idx, None, None
+        return col_idx, None, None, None, None, None
 
-    # Knee: detect first sustained jump, but do not discard the sub-64-page region
-    # because many CPUs have L1 DTLB around this scale.
-    first_significant_knee = None
-    best_knee_i = None
-    best_score = 0.0
+    candidates = []
     for i in range(1, len(latencies)):
         if pages[i] < 4:
             continue
@@ -226,32 +222,59 @@ def estimate_tlb_entries_and_penalty(array_bytes, stride_bytes, matrix, page_str
             continue
         ratio = cur_v / prev_v
         delta = cur_v - prev_v
-        if first_significant_knee is None and ratio >= 1.35 and delta >= 0.8:
-            first_significant_knee = i
-        score = (ratio - 1.0) * cur_v
-        if score > best_score:
-            best_score = score
-            best_knee_i = i
+        score = (ratio - 1.0) * max(cur_v, prev_v)
+        if ratio >= 1.20 and delta >= 0.5:
+            candidates.append((i, ratio, delta, score))
 
-    knee_i = first_significant_knee if first_significant_knee is not None else best_knee_i
-    if knee_i is None:
-        return col_idx, None, None
+    if not candidates:
+        return col_idx, None, None, None, None, None
 
-    tlb_entries_est = int(round(pages[knee_i]))
+    primary = None
+    for item in candidates:
+        _, ratio, delta, _ = item
+        if ratio >= 1.35 and delta >= 0.8:
+            primary = item
+            break
+    if primary is None:
+        primary = max(candidates, key=lambda t: t[3])
 
-    low_plateau = [latencies[i] for i in range(len(latencies)) if pages[i] <= tlb_entries_est]
-    high_plateau = [latencies[i] for i in range(len(latencies)) if pages[i] >= max(tlb_entries_est * 4, 256)]
+    knee1_i = primary[0]
+    knee2_i = None
+    secondary_pool = [
+        t for t in candidates
+        if t[0] > knee1_i and pages[t[0]] >= pages[knee1_i] * 4.0
+    ]
+    if secondary_pool:
+        knee2_i = max(secondary_pool, key=lambda t: t[3])[0]
 
-    if not low_plateau:
-        low_plateau = latencies[: max(1, knee_i)]
-    if not high_plateau:
-        high_plateau = latencies[knee_i:]
+    l1_entries_est = int(round(pages[knee1_i]))
+    stlb_entries_est = int(round(pages[knee2_i])) if knee2_i is not None else None
 
-    low_mean = sum(low_plateau) / len(low_plateau)
-    high_mean = sum(high_plateau) / len(high_plateau)
-    penalty = max(high_mean - low_mean, 0.0)
+    l1_hit_vals = [latencies[i] for i in range(len(latencies)) if pages[i] <= l1_entries_est]
+    stlb_hit_vals = [
+        latencies[i]
+        for i in range(len(latencies))
+        if pages[i] >= max(l1_entries_est * 2, 32)
+        and (stlb_entries_est is None or pages[i] <= stlb_entries_est)
+    ]
+    stlb_miss_vals = [
+        latencies[i]
+        for i in range(len(latencies))
+        if pages[i] >= max((stlb_entries_est if stlb_entries_est is not None else l1_entries_est) * 2, 256)
+    ]
 
-    return col_idx, tlb_entries_est, penalty
+    l1_hit_mean = (sum(l1_hit_vals) / len(l1_hit_vals)) if l1_hit_vals else None
+    stlb_hit_mean = (sum(stlb_hit_vals) / len(stlb_hit_vals)) if stlb_hit_vals else None
+    stlb_miss_mean = (sum(stlb_miss_vals) / len(stlb_miss_vals)) if stlb_miss_vals else None
+
+    l1_to_stlb_penalty = None
+    stlb_miss_penalty = None
+    if l1_hit_mean is not None and stlb_hit_mean is not None:
+        l1_to_stlb_penalty = max(stlb_hit_mean - l1_hit_mean, 0.0)
+    if stlb_hit_mean is not None and stlb_miss_mean is not None:
+        stlb_miss_penalty = max(stlb_miss_mean - stlb_hit_mean, 0.0)
+
+    return col_idx, l1_entries_est, stlb_entries_est, l1_to_stlb_penalty, stlb_miss_penalty, knee1_i
 
 
 def estimate_tlb_associativity(ways, series) -> tuple[int | None, int | None]:
@@ -412,7 +435,7 @@ def plot_page_size_probe(stride_bytes, array_labels, array_bytes, matrix, page_s
     plt.close(fig)
 
 
-def plot_tlb_entries_probe(array_bytes, stride_bytes, matrix, page_stride_bytes: int, out_path: Path):
+def plot_tlb_entries_probe(array_bytes, stride_bytes, matrix, page_stride_bytes: int, out_path: Path, l1_entries_est=None, stlb_entries_est=None):
     fig, ax = plt.subplots(figsize=(11, 7))
 
     col_idx = min(range(len(stride_bytes)), key=lambda i: abs(stride_bytes[i] - page_stride_bytes))
@@ -428,12 +451,18 @@ def plot_tlb_entries_probe(array_bytes, stride_bytes, matrix, page_stride_bytes:
         latencies.append(max(v, DISPLAY_MIN_NS))
 
     ax.plot(pages, latencies, marker="o", linewidth=1.4, markersize=4)
+    if l1_entries_est is not None:
+        ax.axvline(l1_entries_est, color="green", linestyle="--", linewidth=1.2, label=f"L1 knee ~{l1_entries_est} pages")
+    if stlb_entries_est is not None:
+        ax.axvline(stlb_entries_est, color="orange", linestyle="--", linewidth=1.2, label=f"STLB knee ~{stlb_entries_est} pages")
     ax.set_xscale("log", base=2)
     ax.set_yscale("log")
     ax.set_xlabel(f"Pages Touched (ArrayBytes / {bytes_to_label(page_stride_bytes)})")
     ax.set_ylabel("Latency (ns/load, log scale)")
     ax.set_title("TLB Entries / Miss Penalty Probe")
     ax.grid(True, alpha=0.25)
+    if l1_entries_est is not None or stlb_entries_est is not None:
+        ax.legend(fontsize=9, frameon=True)
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
@@ -504,22 +533,41 @@ def plot_tlb_associativity_conflict(stride_labels, ways, series, l1_assoc_est, l
     plt.close(fig)
 
 
-def write_tlb_summary(out_path: Path, page_stride_bytes: int, tlb_entries_est, tlb_miss_penalty_est, tlb_l1_assoc_est, tlb_l2_assoc_est):
+def write_tlb_summary(
+    out_path: Path,
+    page_stride_bytes: int,
+    l1_entries_est,
+    stlb_entries_est,
+    l1_to_stlb_penalty,
+    stlb_miss_penalty,
+    tlb_l1_assoc_est,
+    tlb_l2_assoc_est,
+):
     lines = [
         "TLB Analysis Summary (heuristic)",
         "================================",
         f"Estimated page size: {bytes_to_label(page_stride_bytes)} ({page_stride_bytes} bytes)",
     ]
 
-    if tlb_entries_est is None:
-        lines.append("Estimated TLB entries: inconclusive from current dataset")
+    if l1_entries_est is None:
+        lines.append("Estimated L1 TLB entries: inconclusive from current dataset")
     else:
-        lines.append(f"Estimated TLB entries: ~{tlb_entries_est}")
+        lines.append(f"Estimated L1 TLB entries: ~{l1_entries_est}")
 
-    if tlb_miss_penalty_est is None:
-        lines.append("Estimated TLB miss penalty: inconclusive from current dataset")
+    if stlb_entries_est is None:
+        lines.append("Estimated STLB entries: inconclusive from current dataset")
     else:
-        lines.append(f"Estimated TLB miss penalty: ~{tlb_miss_penalty_est:.2f} ns/load")
+        lines.append(f"Estimated STLB entries: ~{stlb_entries_est}")
+
+    if l1_to_stlb_penalty is None:
+        lines.append("Estimated L1->STLB penalty: inconclusive from current dataset")
+    else:
+        lines.append(f"Estimated L1->STLB penalty: ~{l1_to_stlb_penalty:.2f} ns/load")
+
+    if stlb_miss_penalty is None:
+        lines.append("Estimated STLB miss penalty: inconclusive from current dataset")
+    else:
+        lines.append(f"Estimated STLB miss penalty: ~{stlb_miss_penalty:.2f} ns/load")
 
     if tlb_l1_assoc_est is None:
         lines.append("Estimated L1 TLB associativity: inconclusive")
@@ -562,7 +610,7 @@ def main():
     plot_textbook_style(stride_labels, array_labels, matrix, textbook_path)
 
     page_stride_bytes = detect_page_stride(stride_bytes, array_bytes, matrix)
-    tlb_col_idx, tlb_entries_est, tlb_miss_penalty_est = estimate_tlb_entries_and_penalty(
+    tlb_col_idx, l1_entries_est, stlb_entries_est, l1_to_stlb_penalty, stlb_miss_penalty, _ = estimate_tlb_entries_and_penalty(
         array_bytes,
         stride_bytes,
         matrix,
@@ -571,7 +619,15 @@ def main():
     _ = tlb_col_idx
 
     plot_page_size_probe(stride_bytes, array_labels, array_bytes, matrix, page_stride_bytes, page_probe_path)
-    plot_tlb_entries_probe(array_bytes, stride_bytes, matrix, page_stride_bytes, entries_probe_path)
+    plot_tlb_entries_probe(
+        array_bytes,
+        stride_bytes,
+        matrix,
+        page_stride_bytes,
+        entries_probe_path,
+        l1_entries_est=l1_entries_est,
+        stlb_entries_est=stlb_entries_est,
+    )
     plot_tlb_associativity_probe(stride_bytes, array_labels, array_bytes, matrix, page_stride_bytes, assoc_probe_path)
 
     tlb_l1_assoc_est = None
@@ -591,8 +647,10 @@ def main():
     write_tlb_summary(
         tlb_summary_path,
         page_stride_bytes,
-        tlb_entries_est,
-        tlb_miss_penalty_est,
+        l1_entries_est,
+        stlb_entries_est,
+        l1_to_stlb_penalty,
+        stlb_miss_penalty,
         tlb_l1_assoc_est,
         tlb_l2_assoc_est,
     )
