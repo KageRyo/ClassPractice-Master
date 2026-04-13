@@ -214,7 +214,8 @@ def estimate_tlb_entries_and_penalty(array_bytes, stride_bytes, matrix, page_str
 
     candidates = []
     for i in range(1, len(latencies)):
-        if pages[i] < 4:
+        # Start from at least 8 pages to avoid tiny-working-set cache artifacts.
+        if pages[i] < 8:
             continue
         prev_v = latencies[i - 1]
         cur_v = latencies[i]
@@ -231,8 +232,11 @@ def estimate_tlb_entries_and_penalty(array_bytes, stride_bytes, matrix, page_str
 
     primary = None
     for item in candidates:
-        _, ratio, delta, _ = item
-        if ratio >= 1.35 and delta >= 0.8:
+        i, ratio, delta, _ = item
+        sustained = False
+        if i + 1 < len(latencies) and latencies[i + 1] >= latencies[i] * 0.90:
+            sustained = True
+        if ratio >= 1.35 and delta >= 0.8 and sustained:
             primary = item
             break
     if primary is None:
@@ -242,7 +246,9 @@ def estimate_tlb_entries_and_penalty(array_bytes, stride_bytes, matrix, page_str
     knee2_i = None
     secondary_pool = [
         t for t in candidates
-        if t[0] > knee1_i and pages[t[0]] >= pages[knee1_i] * 4.0
+        if t[0] > knee1_i
+        and pages[t[0]] >= pages[knee1_i] * 4.0
+        and pages[t[0]] <= 4096.0
     ]
     if secondary_pool:
         knee2_i = max(secondary_pool, key=lambda t: t[3])[0]

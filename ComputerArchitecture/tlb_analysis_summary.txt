@@ -2,8 +2,8 @@ TLB Analysis Summary (heuristic)
 ================================
 Estimated page size: 4K (4096 bytes)
 Estimated L1 TLB entries: ~16
-Estimated STLB entries: ~8192
-Estimated L1->STLB penalty: ~21.80 ns/load
-Estimated STLB miss penalty: ~111.20 ns/load
-Estimated L1 TLB associativity: ~9-way
-Estimated L2/STLB associativity: inconclusive
+Estimated STLB entries: ~4096
+Estimated L1->STLB penalty: ~9.88 ns/load
+Estimated STLB miss penalty: ~115.22 ns/load
+Estimated L1 TLB associativity: ~6-way
+Estimated L2/STLB associativity: ~12-way

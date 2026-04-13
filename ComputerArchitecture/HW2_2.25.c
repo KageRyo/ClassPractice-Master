@@ -22,7 +22,7 @@
 
 #define PAGE_BYTES 4096
 #define PAGE_ELEMS (PAGE_BYTES / (int)sizeof(int))
-#define TLB_ASSOC_MEASURE_SECS 1.0
+#define TLB_ASSOC_MEASURE_SECS 3.0
 #define TLB_ASSOC_MAX_WAYS 24
 
 int x[ARRAY_MAX];
