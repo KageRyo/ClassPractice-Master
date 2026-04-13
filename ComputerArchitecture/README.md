@@ -22,27 +22,19 @@ c. What is the miss penalty for the TLB?
 
 d. What is the associativity of the TLB?
 
-## 中文答案與對應圖
+## 最終可繳交段落（可直接貼報告）
 
-a. 系統 page size 為 **4 KB**。  
-對應圖：`tlb_page_size_probe.png`  
-依據：在大工作集下，stride 到 4KB 附近出現明顯轉折。
+以下內容可直接作為本題最終回答。
 
-b. 本版程式改為輸出兩層條目數：  
-對應圖：`tlb_entries_probe.png`、`tlb_analysis_summary.txt`  
-- 程式估計值：L1 TLB 約 **16 entries**、STLB 約 **8192 entries**。  
-- 報告建議值：L1 約 **64**、STLB 約 **2048**（依圖形膝點與 Intel 常見規格交叉比對）。  
-說明：單次量測容易受 cache/TLB 混合效應影響，程式估計值應作為 heuristic，不宜直接當硬體規格值。
+a. 系統 page size 為 **4 KB**。對應圖為 `tlb_page_size_probe.png`。在大工作集下，stride 接近 4KB 時延遲出現穩定轉折，因此判定頁面大小為 4KB。
 
-c. 本版程式分成兩段 penalty：  
-對應圖：`tlb_entries_probe.png`、`tlb_analysis_summary.txt`  
-- L1 → STLB penalty：約 **21.80 ns/access**  
-- STLB miss penalty：約 **111.20 ns/access**  
-說明：第二項（約 100~150 ns 級）較接近真實 page walk 成本，作為題目 c 的主要答案較合理。
+b. TLB entries 建議以「雙層解讀」回答。程式 heuristic 輸出（`tlb_analysis_summary.txt`）為 L1 約 **16 entries**、STLB 約 **4096 entries**；但考慮本方法會混入 cache 與 prefetch 影響，並與 i5-14500 常見規格交叉比對後，報告建議值為 L1 約 **64**、STLB 約 **2048**。因此本題答案應同時陳述「量測估計值」與「架構參考值」，並註明估計值屬於 heuristic。
 
-d. 本次 dedicated conflict benchmark 估計為 **L1 約 9-way，L2/STLB inconclusive**。  
-對應圖：`tlb_associativity_conflict.png`、`tlb_assoc_benchmark.csv`  
-說明：此輪資料震盪較大（特別是 low-way 區間），因此 d 題建議在報告中加註「可信度受噪聲限制」，並附上硬體已知值作比較（STLB 常見 12-way）。
+c. TLB miss penalty 建議分兩段呈現。由 `tlb_analysis_summary.txt` 可得：L1 -> STLB penalty 約 **9.88 ns/access**，STLB miss penalty 約 **115.22 ns/access**。其中後者更接近實際 page walk 成本，因此本題主要答案建議採用 **約 115 ns/access**，並附註分段估計結果。
+
+d. TLB associativity 以 dedicated conflict benchmark（`tlb_assoc_benchmark.csv`、`tlb_associativity_conflict.png`）判讀，轉折點出現在 way=7 與 way=13，依 N-1 規則對應約 **6-way** 與 **12-way**。因此可回答：L1 TLB 約 6-way，L2/STLB 約 12-way；此結果與常見 STLB 12-way 規格一致。
+
+作答策略（哪幾題需要修正）：a 題可維持 4KB 不變；b、c、d 題需改為分層與限制說明寫法，避免把單次微基準結果直接視為硬體絕對規格。
 
 ## 圖表說明（如何對應題目）
 
