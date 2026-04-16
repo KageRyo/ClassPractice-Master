@@ -5,6 +5,9 @@ from sklearn.metrics import mean_squared_log_error, r2_score
 import pandas as pd
 import joblib
 
+
+LOG1P_PRED_MAX = 8.0
+
 def rmsle(y_true, y_pred):
     y_true = np.maximum(np.asarray(y_true), 0)
     y_pred = np.maximum(np.asarray(y_pred), 0)
@@ -34,7 +37,12 @@ def predict_model(model, X_test, model_type='xgb'):
                 y_batch = y_batch.to(device)
                 preds = model(X_batch)
                 y_pred.extend(np.atleast_1d(np.maximum(preds.squeeze().cpu().numpy(), 0)))
-        return np.asarray(y_pred)
+
+        y_pred = np.asarray(y_pred, dtype=float)
+        if getattr(model, 'target_transform', 'none') == 'log1p':
+            y_pred = np.expm1(np.clip(y_pred, a_min=0, a_max=LOG1P_PRED_MAX))
+
+        return y_pred
 
     raise ValueError(f'Unsupported model_type: {model_type}')
 
@@ -87,26 +95,31 @@ def load_model(model_type, path):
         from src.models.models_training import MLPModel
         model = MLPModel(input_size=14, hidden_size=64, output_size=1)
         model.load_state_dict(torch.load(path))
+        model.target_transform = 'log1p'
         return model
     elif model_type == 'lstm':
         from src.models.models_training import OptimizedLSTMModel
         model = OptimizedLSTMModel(input_size=14, hidden_size=64, num_layers=2, output_size=1)
         model.load_state_dict(torch.load(path))
+        model.target_transform = 'log1p'
         return model
     elif model_type == 'cnn1d':
         from src.models.models_training import CNN1DModel
         model = CNN1DModel(input_size=14, sequence_length=7, output_size=1)
         model.load_state_dict(torch.load(path))
+        model.target_transform = 'log1p'
         return model
     elif model_type == 'resnet1d':
         from src.models.models_training import ResNet1DModel
         model = ResNet1DModel(input_size=14, output_size=1)
         model.load_state_dict(torch.load(path))
+        model.target_transform = 'log1p'
         return model
     elif model_type == 'transformer':
         from src.models.models_training import TimeSeriesTransformerModel
         model = TimeSeriesTransformerModel(input_size=14, d_model=64, nhead=4, num_layers=2, output_size=1)
         model.load_state_dict(torch.load(path))
+        model.target_transform = 'log1p'
         return model
 
 def save_results(results, filename='results.csv'):

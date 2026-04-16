@@ -2,6 +2,7 @@ import xgboost as xgb
 import lightgbm as lgb
 from catboost import CatBoostRegressor
 import math
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -237,12 +238,31 @@ def train_mlp(
     num_epochs=100,
     log_interval=5,
     progress_callback=None,
-    save_path='models/mlp_model.pth'
+    save_path='models/mlp_model.pth',
+    X_val=None,
+    y_val=None,
+    patience=12,
+    min_delta=1e-4,
+    target_transform='none',
 ):
+    y_train_arr = y_train.values.astype(np.float32)
+    if target_transform == 'log1p':
+        y_train_arr = np.log1p(np.clip(y_train_arr, a_min=0, a_max=None))
+
     X_train_tensor = torch.tensor(X_train.values, dtype=torch.float32)
-    y_train_tensor = torch.tensor(y_train.values, dtype=torch.float32)
+    y_train_tensor = torch.tensor(y_train_arr, dtype=torch.float32)
     train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+
+    val_loader = None
+    if X_val is not None and y_val is not None and len(X_val) > 0:
+        y_val_arr = y_val.values.astype(np.float32)
+        if target_transform == 'log1p':
+            y_val_arr = np.log1p(np.clip(y_val_arr, a_min=0, a_max=None))
+        X_val_tensor = torch.tensor(X_val.values, dtype=torch.float32)
+        y_val_tensor = torch.tensor(y_val_arr, dtype=torch.float32)
+        val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
+        val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = MLPModel(input_size, hidden_size, 1)
@@ -251,7 +271,12 @@ def train_mlp(
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
 
+    best_state = None
+    best_score = float('inf')
+    stale_epochs = 0
+
     for epoch in range(num_epochs):
+        model.train()
         running_loss = 0.0
         for X_batch, y_batch in train_loader:
             X_batch = X_batch.to(device)
@@ -265,10 +290,50 @@ def train_mlp(
             running_loss += loss.item() * len(X_batch)
 
         avg_loss = running_loss / len(train_dataset)
-        scheduler.step(avg_loss)
+
+        monitor_loss = avg_loss
+        val_loss = None
+        if val_loader is not None:
+            model.eval()
+            val_running = 0.0
+            with torch.no_grad():
+                for X_val_batch, y_val_batch in val_loader:
+                    X_val_batch = X_val_batch.to(device)
+                    y_val_batch = y_val_batch.to(device)
+                    preds = model(X_val_batch)
+                    batch_loss = criterion(preds.squeeze(), y_val_batch)
+                    val_running += batch_loss.item() * len(X_val_batch)
+            val_loss = val_running / len(val_loader.dataset)
+            monitor_loss = val_loss
+
+        scheduler.step(monitor_loss)
+
+        if monitor_loss + min_delta < best_score:
+            best_score = monitor_loss
+            best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            stale_epochs = 0
+        else:
+            stale_epochs += 1
+
         if progress_callback and ((epoch + 1) == 1 or (epoch + 1) == num_epochs or (epoch + 1) % max(log_interval, 1) == 0):
             lr = optimizer.param_groups[0]['lr']
-            progress_callback(f"MLP Epoch {epoch + 1}/{num_epochs} - Train MSE Loss: {avg_loss:.6f} - LR: {lr:.6e}")
+            if val_loss is None:
+                progress_callback(f"MLP Epoch {epoch + 1}/{num_epochs} - Train MSE Loss: {avg_loss:.6f} - LR: {lr:.6e}")
+            else:
+                progress_callback(
+                    f"MLP Epoch {epoch + 1}/{num_epochs} - Train MSE Loss: {avg_loss:.6f} "
+                    f"- Val MSE Loss: {val_loss:.6f} - LR: {lr:.6e}"
+                )
+
+        if val_loader is not None and stale_epochs >= patience:
+            if progress_callback:
+                progress_callback(f"MLP Early stopping at epoch {epoch + 1} (best monitor loss={best_score:.6f})")
+            break
+
+    if best_state is not None:
+        model.load_state_dict(best_state)
+
+    model.target_transform = target_transform
 
     torch.save(model.state_dict(), save_path)
     return model
@@ -282,7 +347,12 @@ def train_lstm(
     num_epochs=30,
     log_interval=5,
     progress_callback=None,
-    save_path='models/lstm_model.pth'
+    save_path='models/lstm_model.pth',
+    X_val_seq=None,
+    y_val_seq=None,
+    patience=12,
+    min_delta=1e-4,
+    target_transform='none',
 ):
     return train_optimized_lstm(
         X_train_seq=X_train_seq,
@@ -294,6 +364,11 @@ def train_lstm(
         log_interval=log_interval,
         progress_callback=progress_callback,
         save_path=save_path,
+        X_val_seq=X_val_seq,
+        y_val_seq=y_val_seq,
+        patience=patience,
+        min_delta=min_delta,
+        target_transform=target_transform,
     )
 
 
@@ -308,11 +383,30 @@ def _train_sequence_regressor(
     model_name='SequenceModel',
     lr=1e-3,
     weight_decay=1e-4,
+    X_val_seq=None,
+    y_val_seq=None,
+    patience=12,
+    min_delta=1e-4,
+    target_transform='none',
 ):
+    y_train_arr = np.asarray(y_train_seq, dtype=np.float32)
+    if target_transform == 'log1p':
+        y_train_arr = np.log1p(np.clip(y_train_arr, a_min=0, a_max=None))
+
     X_train_tensor = torch.tensor(X_train_seq, dtype=torch.float32)
-    y_train_tensor = torch.tensor(y_train_seq, dtype=torch.float32)
+    y_train_tensor = torch.tensor(y_train_arr, dtype=torch.float32)
     train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+
+    val_loader = None
+    if X_val_seq is not None and y_val_seq is not None and len(X_val_seq) > 0:
+        y_val_arr = np.asarray(y_val_seq, dtype=np.float32)
+        if target_transform == 'log1p':
+            y_val_arr = np.log1p(np.clip(y_val_arr, a_min=0, a_max=None))
+        X_val_tensor = torch.tensor(X_val_seq, dtype=torch.float32)
+        y_val_tensor = torch.tensor(y_val_arr, dtype=torch.float32)
+        val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
+        val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
@@ -320,7 +414,12 @@ def _train_sequence_regressor(
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
 
+    best_state = None
+    best_score = float('inf')
+    stale_epochs = 0
+
     for epoch in range(num_epochs):
+        model.train()
         running_loss = 0.0
         for X_batch, y_batch in train_loader:
             X_batch = X_batch.to(device)
@@ -334,12 +433,52 @@ def _train_sequence_regressor(
             running_loss += loss.item() * len(X_batch)
 
         avg_loss = running_loss / len(train_dataset)
-        scheduler.step(avg_loss)
+
+        monitor_loss = avg_loss
+        val_loss = None
+        if val_loader is not None:
+            model.eval()
+            val_running = 0.0
+            with torch.no_grad():
+                for X_val_batch, y_val_batch in val_loader:
+                    X_val_batch = X_val_batch.to(device)
+                    y_val_batch = y_val_batch.to(device)
+                    preds = model(X_val_batch)
+                    batch_loss = criterion(preds.squeeze(), y_val_batch)
+                    val_running += batch_loss.item() * len(X_val_batch)
+            val_loss = val_running / len(val_loader.dataset)
+            monitor_loss = val_loss
+
+        scheduler.step(monitor_loss)
+
+        if monitor_loss + min_delta < best_score:
+            best_score = monitor_loss
+            best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            stale_epochs = 0
+        else:
+            stale_epochs += 1
+
         if progress_callback and ((epoch + 1) == 1 or (epoch + 1) == num_epochs or (epoch + 1) % max(log_interval, 1) == 0):
             lr = optimizer.param_groups[0]['lr']
-            progress_callback(
-                f"{model_name} Epoch {epoch + 1}/{num_epochs} - Train MSE Loss: {avg_loss:.6f} - LR: {lr:.6e}"
-            )
+            if val_loss is None:
+                progress_callback(
+                    f"{model_name} Epoch {epoch + 1}/{num_epochs} - Train MSE Loss: {avg_loss:.6f} - LR: {lr:.6e}"
+                )
+            else:
+                progress_callback(
+                    f"{model_name} Epoch {epoch + 1}/{num_epochs} - Train MSE Loss: {avg_loss:.6f} "
+                    f"- Val MSE Loss: {val_loss:.6f} - LR: {lr:.6e}"
+                )
+
+        if val_loader is not None and stale_epochs >= patience:
+            if progress_callback:
+                progress_callback(f"{model_name} Early stopping at epoch {epoch + 1} (best monitor loss={best_score:.6f})")
+            break
+
+    if best_state is not None:
+        model.load_state_dict(best_state)
+
+    model.target_transform = target_transform
 
     torch.save(model.state_dict(), save_path)
     return model
@@ -355,6 +494,11 @@ def train_optimized_lstm(
     log_interval=5,
     progress_callback=None,
     save_path='models/lstm_model.pth',
+    X_val_seq=None,
+    y_val_seq=None,
+    patience=12,
+    min_delta=1e-4,
+    target_transform='none',
 ):
     model = OptimizedLSTMModel(
         input_size=input_size,
@@ -374,6 +518,11 @@ def train_optimized_lstm(
         model_name='OptimizedLSTM',
         lr=1e-3,
         weight_decay=1e-4,
+        X_val_seq=X_val_seq,
+        y_val_seq=y_val_seq,
+        patience=patience,
+        min_delta=min_delta,
+        target_transform=target_transform,
     )
 
 
@@ -386,6 +535,11 @@ def train_cnn1d(
     log_interval=5,
     progress_callback=None,
     save_path='models/cnn1d_model.pth',
+    X_val_seq=None,
+    y_val_seq=None,
+    patience=12,
+    min_delta=1e-4,
+    target_transform='none',
 ):
     model = CNN1DModel(
         input_size=input_size,
@@ -404,6 +558,11 @@ def train_cnn1d(
         model_name='CNN1D',
         lr=1e-3,
         weight_decay=1e-4,
+        X_val_seq=X_val_seq,
+        y_val_seq=y_val_seq,
+        patience=patience,
+        min_delta=min_delta,
+        target_transform=target_transform,
     )
 
 
@@ -415,6 +574,11 @@ def train_transformer(
     log_interval=5,
     progress_callback=None,
     save_path='models/transformer_model.pth',
+    X_val_seq=None,
+    y_val_seq=None,
+    patience=12,
+    min_delta=1e-4,
+    target_transform='none',
 ):
     model = TimeSeriesTransformerModel(
         input_size=input_size,
@@ -435,6 +599,11 @@ def train_transformer(
         model_name='Transformer',
         lr=1e-3,
         weight_decay=1e-4,
+        X_val_seq=X_val_seq,
+        y_val_seq=y_val_seq,
+        patience=patience,
+        min_delta=min_delta,
+        target_transform=target_transform,
     )
 
 
@@ -446,6 +615,11 @@ def train_resnet1d(
     log_interval=5,
     progress_callback=None,
     save_path='models/resnet1d_model.pth',
+    X_val_seq=None,
+    y_val_seq=None,
+    patience=12,
+    min_delta=1e-4,
+    target_transform='none',
 ):
     model = ResNet1DModel(
         input_size=input_size,
@@ -463,4 +637,9 @@ def train_resnet1d(
         model_name='ResNet1D',
         lr=3e-4,
         weight_decay=1e-4,
+        X_val_seq=X_val_seq,
+        y_val_seq=y_val_seq,
+        patience=patience,
+        min_delta=min_delta,
+        target_transform=target_transform,
     )

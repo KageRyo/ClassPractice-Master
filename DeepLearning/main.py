@@ -67,6 +67,9 @@ def parse_args():
     parser.add_argument('--lstm-hidden-size', type=int, default=64, help='Hidden size for LSTM')
     parser.add_argument('--lstm-num-layers', type=int, default=2, help='Number of LSTM layers')
     parser.add_argument('--nn-log-interval', type=int, default=5, help='Epoch interval for NN training logs')
+    parser.add_argument('--val-start-date', type=str, default='2016-10-01', help='Validation split start date within training years')
+    parser.add_argument('--early-stopping-patience', type=int, default=12, help='Early stopping patience for neural models')
+    parser.add_argument('--target-transform', type=str, default='log1p', choices=['none', 'log1p'], help='Target transform used for neural models')
     parser.add_argument('--overfit-gap-threshold', type=float, default=0.08, help='Threshold of (Test_RMSLE - Train_RMSLE) to flag overfitting')
     parser.add_argument('--skip-plot', action='store_true', help='Disable matplotlib plotting')
     return parser.parse_args()
@@ -294,6 +297,25 @@ y_test = test_data[target]
 logger.info(f'訓練資料形狀: {X_train.shape}')
 logger.info(f'測試資料形狀: {X_test.shape}')
 
+val_start_date = pd.to_datetime(args.val_start_date)
+train_fit_mask = train_data['visit_date'] < val_start_date
+val_mask = train_data['visit_date'] >= val_start_date
+
+train_fit_data = train_data[train_fit_mask].copy()
+val_data = train_data[val_mask].copy()
+
+if train_fit_data.empty or val_data.empty:
+    logger.warning('Validation split is empty. Falling back to training without validation split.')
+    train_fit_data = train_data.copy()
+    val_data = pd.DataFrame(columns=train_data.columns)
+
+X_train_fit = train_fit_data[features]
+y_train_fit = train_fit_data[target]
+X_val = val_data[features] if not val_data.empty else None
+y_val = val_data[target] if not val_data.empty else None
+
+logger.info(f'神經網路訓練切分 | fit={len(train_fit_data)} | val={len(val_data)} | target_transform={args.target_transform}')
+
 # 題意要求：測試集中店休日(0 visitors)不納入評分
 test_open_mask = y_test > 0
 X_test_open = X_test[test_open_mask]
@@ -312,7 +334,8 @@ if invalid_models:
 
 logger.info(
     f'本次訓練設定 | models={models_to_train} | mlp_epochs={args.mlp_epochs} '
-    f'| lstm_epochs={args.lstm_epochs} | sequence_length={args.sequence_length}'
+    f'| lstm_epochs={args.lstm_epochs} | sequence_length={args.sequence_length} '
+    f'| val_start_date={args.val_start_date} | early_stopping_patience={args.early_stopping_patience}'
 )
 
 results = []
@@ -346,6 +369,27 @@ X_test_seq = transform_sequences_with_scaler(
 y_train_seq = seq_split['y_train_seq']
 y_test_seq = seq_split['y_test_seq']
 
+train_target_dates = pd.to_datetime(seq_split['train_target_dates'])
+seq_fit_mask = train_target_dates < val_start_date
+seq_val_mask = train_target_dates >= val_start_date
+
+X_train_seq_fit = X_train_seq[seq_fit_mask]
+y_train_seq_fit = y_train_seq[seq_fit_mask]
+X_val_seq = X_train_seq[seq_val_mask]
+y_val_seq = y_train_seq[seq_val_mask]
+
+if len(X_train_seq_fit) == 0 or len(X_val_seq) == 0:
+    logger.warning('Sequence validation split is empty. Falling back to training without sequence validation split.')
+    X_train_seq_fit = X_train_seq
+    y_train_seq_fit = y_train_seq
+    X_val_seq = None
+    y_val_seq = None
+
+logger.info(
+    f'序列訓練切分 | fit={len(X_train_seq_fit)} | val={0 if X_val_seq is None else len(X_val_seq)} | '
+    f'target_transform={args.target_transform}'
+)
+
 if {'lstm', 'cnn1d', 'resnet1d', 'transformer'} & set(models_to_train):
     logger.info(f'Sequence samples | train={len(X_train_seq)}, test={len(X_test_seq)}')
 
@@ -375,28 +419,36 @@ for model_name in models_to_train:
             test_metrics = evaluate_regression_metrics(model, X_test_open, y_test_open, model_name)
         elif model_name == 'mlp':
             model = train_mlp(
-                X_train,
-                y_train,
+                X_train_fit,
+                y_train_fit,
                 input_size=len(features),
                 hidden_size=args.mlp_hidden_size,
                 num_epochs=args.mlp_epochs,
                 log_interval=args.nn_log_interval,
                 progress_callback=lambda msg: logger.info(msg),
-                save_path=f'models/{model_name}_model.pth'
+                save_path=f'models/{model_name}_model.pth',
+                X_val=X_val,
+                y_val=y_val,
+                patience=args.early_stopping_patience,
+                target_transform=args.target_transform,
             )
             train_metrics = evaluate_regression_metrics(model, X_train, y_train, model_name)
             test_metrics = evaluate_regression_metrics(model, X_test_open, y_test_open, model_name)
         elif model_name == 'lstm':
             model = train_lstm(
-                X_train_seq,
-                y_train_seq,
+                X_train_seq_fit,
+                y_train_seq_fit,
                 input_size=len(features),
                 hidden_size=args.lstm_hidden_size,
                 num_layers=args.lstm_num_layers,
                 num_epochs=args.lstm_epochs,
                 log_interval=args.nn_log_interval,
                 progress_callback=lambda msg: logger.info(msg),
-                save_path=f'models/{model_name}_model.pth'
+                save_path=f'models/{model_name}_model.pth',
+                X_val_seq=X_val_seq,
+                y_val_seq=y_val_seq,
+                patience=args.early_stopping_patience,
+                target_transform=args.target_transform,
             )
             test_seq_open_mask = y_test_seq > 0
             X_test_seq_open = X_test_seq[test_seq_open_mask]
@@ -405,14 +457,18 @@ for model_name in models_to_train:
             test_metrics = evaluate_regression_metrics(model, X_test_seq_open, y_test_seq_open, model_name)
         elif model_name == 'cnn1d':
             model = train_cnn1d(
-                X_train_seq,
-                y_train_seq,
+                X_train_seq_fit,
+                y_train_seq_fit,
                 input_size=len(features),
                 sequence_length=sequence_length,
                 num_epochs=args.cnn_epochs,
                 log_interval=args.nn_log_interval,
                 progress_callback=lambda msg: logger.info(msg),
-                save_path=f'models/{model_name}_model.pth'
+                save_path=f'models/{model_name}_model.pth',
+                X_val_seq=X_val_seq,
+                y_val_seq=y_val_seq,
+                patience=args.early_stopping_patience,
+                target_transform=args.target_transform,
             )
             test_seq_open_mask = y_test_seq > 0
             X_test_seq_open = X_test_seq[test_seq_open_mask]
@@ -421,13 +477,17 @@ for model_name in models_to_train:
             test_metrics = evaluate_regression_metrics(model, X_test_seq_open, y_test_seq_open, model_name)
         elif model_name == 'resnet1d':
             model = train_resnet1d(
-                X_train_seq,
-                y_train_seq,
+                X_train_seq_fit,
+                y_train_seq_fit,
                 input_size=len(features),
                 num_epochs=args.resnet_epochs,
                 log_interval=args.nn_log_interval,
                 progress_callback=lambda msg: logger.info(msg),
-                save_path=f'models/{model_name}_model.pth'
+                save_path=f'models/{model_name}_model.pth',
+                X_val_seq=X_val_seq,
+                y_val_seq=y_val_seq,
+                patience=args.early_stopping_patience,
+                target_transform=args.target_transform,
             )
             test_seq_open_mask = y_test_seq > 0
             X_test_seq_open = X_test_seq[test_seq_open_mask]
@@ -436,13 +496,17 @@ for model_name in models_to_train:
             test_metrics = evaluate_regression_metrics(model, X_test_seq_open, y_test_seq_open, model_name)
         elif model_name == 'transformer':
             model = train_transformer(
-                X_train_seq,
-                y_train_seq,
+                X_train_seq_fit,
+                y_train_seq_fit,
                 input_size=len(features),
                 num_epochs=args.transformer_epochs,
                 log_interval=args.nn_log_interval,
                 progress_callback=lambda msg: logger.info(msg),
-                save_path=f'models/{model_name}_model.pth'
+                save_path=f'models/{model_name}_model.pth',
+                X_val_seq=X_val_seq,
+                y_val_seq=y_val_seq,
+                patience=args.early_stopping_patience,
+                target_transform=args.target_transform,
             )
             test_seq_open_mask = y_test_seq > 0
             X_test_seq_open = X_test_seq[test_seq_open_mask]
