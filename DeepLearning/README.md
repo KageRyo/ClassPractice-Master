@@ -46,3 +46,8 @@
 1. 使用 loguru 輸出訓練流程日誌。
 2. 終端機顯示 INFO 以上訊息。
 3. 同步寫入 logs/training.log（自動 rotation）。
+
+預設訓練模型：
+
+1. 目前直接執行 `python main.py` 時，預設只會訓練 `mlp,resnet1d`。
+2. 其他模型（如 lgbm/lstm/cnn1d/transformer）需透過 `--models` 參數手動指定。

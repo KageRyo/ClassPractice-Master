@@ -6,3 +6,16 @@
 conda activate dl-class
 ```
 - Python 3.11
+
+預設執行：
+
+```bash
+python main.py --skip-plot
+```
+
+- 預設只會跑 `mlp,resnet1d`。
+- 若要覆寫模型清單，請使用 `--models`，例如：
+
+```bash
+python main.py --models lgbm,mlp,lstm,cnn1d,resnet1d,transformer --skip-plot
+```
