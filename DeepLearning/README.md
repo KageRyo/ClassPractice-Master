@@ -29,3 +29,9 @@
 1. 主評估指標為 Root Mean Squared Log Error (RMSLE)。
 2. 測試集評分會排除 visitors = 0 的樣本（closed days）。
 3. 輸出結果 `results.csv` 使用 `Train_RMSLE` 與 `Test_RMSLE` 欄位，不使用百分比 accuracy。
+
+程式碼結構說明：
+
+1. 主要執行入口為 `main.py`。
+2. 正式實作統一放在 `src/` 底下（`src/data`、`src/preprocessing`、`src/models`、`src/evaluation`）。
+3. 根目錄不再保留重複模組，以避免匯入混淆。
