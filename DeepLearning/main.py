@@ -54,6 +54,12 @@ y_test = test_data[target]
 print(f"訓練資料形狀: {X_train.shape}")
 print(f"測試資料形狀: {X_test.shape}")
 
+# 題意要求：測試集中店休日(0 visitors)不納入評分
+test_open_mask = y_test > 0
+X_test_open = X_test[test_open_mask]
+y_test_open = y_test[test_open_mask]
+print(f"測試評分樣本(排除 0 visitors): {X_test_open.shape[0]}")
+
 # 建立 models 資料夾
 os.makedirs('models', exist_ok=True)
 
@@ -88,33 +94,35 @@ for model_name in models_to_train:
         print(f"\n訓練 {model_name}...")
         if model_name == 'linear':
             model = train_linear(X_train, y_train, f'models/{model_name}_model.pkl')
-            rmsle_score = evaluate_model(model, X_test, y_test, model_name)
+            train_rmsle = evaluate_model(model, X_train, y_train, model_name)
+            test_rmsle = evaluate_model(model, X_test_open, y_test_open, model_name)
         elif model_name == 'rf':
             model = train_rf(X_train, y_train, f'models/{model_name}_model.pkl')
-            rmsle_score = evaluate_model(model, X_test, y_test, model_name)
+            train_rmsle = evaluate_model(model, X_train, y_train, model_name)
+            test_rmsle = evaluate_model(model, X_test_open, y_test_open, model_name)
         elif model_name == 'xgb':
             model = train_xgb(X_train, y_train, f'models/{model_name}_model.pkl')
-            rmsle_score = evaluate_model(model, X_test, y_test, model_name)
+            train_rmsle = evaluate_model(model, X_train, y_train, model_name)
+            test_rmsle = evaluate_model(model, X_test_open, y_test_open, model_name)
         elif model_name == 'mlp':
             model = train_mlp(X_train, y_train, input_size=len(features), save_path=f'models/{model_name}_model.pth')
-            rmsle_score = evaluate_model(model, X_test, y_test, model_name)
+            train_rmsle = evaluate_model(model, X_train, y_train, model_name)
+            test_rmsle = evaluate_model(model, X_test_open, y_test_open, model_name)
         elif model_name == 'lstm':
             model = train_lstm(X_train_seq, y_train_seq, input_size=len(features), save_path=f'models/{model_name}_model.pth')
-            rmsle_score = evaluate_model(model, X_test_seq, y_test_seq, model_name)
+            test_seq_open_mask = y_test_seq > 0
+            X_test_seq_open = X_test_seq[test_seq_open_mask]
+            y_test_seq_open = y_test_seq[test_seq_open_mask]
+            train_rmsle = evaluate_model(model, X_train_seq, y_train_seq, model_name)
+            test_rmsle = evaluate_model(model, X_test_seq_open, y_test_seq_open, model_name)
 
-        print(f"{model_name} RMSLE: {rmsle_score}")
+        print(f"{model_name} Train RMSLE: {train_rmsle}")
+        print(f"{model_name} Test RMSLE: {test_rmsle}")
 
-        # 簡化準確率
-        if model_name == 'lstm':
-            mean_y = np.mean(y_test_seq)
-        else:
-            mean_y = np.mean(y_test)
-        accuracy = 1 - rmsle_score / mean_y
         results.append({
             'Model': model_name,
-            'RMSLE': rmsle_score,
-            'Training_Accuracy': 1 - rmsle_score / np.mean(y_train if model_name != 'lstm' else y_train_seq),
-            'Testing_Accuracy': accuracy
+            'Train_RMSLE': train_rmsle,
+            'Test_RMSLE': test_rmsle
         })
     except Exception as e:
         print(f"訓練 {model_name} 時發生錯誤: {e}")
