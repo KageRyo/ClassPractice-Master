@@ -34,10 +34,15 @@
 
 1. 主要執行入口為 `main.py`。
 2. 正式實作統一放在 `src/` 底下（`src/data`、`src/preprocessing`、`src/models`、`src/evaluation`）。
-3. 根目錄不再保留重複模組，以避免匯入混淆。
 
 執行環境資訊：
 
 1. Python 版本：3.11.15
 2. conda 環境名稱：dl-class
 3. 套件版本請參考 requirements.txt
+
+日誌輸出：
+
+1. 使用 loguru 輸出訓練流程日誌。
+2. 終端機顯示 INFO 以上訊息。
+3. 同步寫入 logs/training.log（自動 rotation）。

@@ -4,11 +4,33 @@ import random
 import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
+from loguru import logger
 from src.data.data_loading import load_data
 from src.preprocessing.preprocessing import preprocess_data
 from src.models.models_training import train_xgb, train_linear, train_rf, train_mlp, train_lstm
 from src.evaluation.evaluation import rmsle, evaluate_model, save_results
 import os
+import sys
+
+
+def setup_logger():
+    os.makedirs('logs', exist_ok=True)
+    logger.remove()
+    logger.add(
+        sys.stderr,
+        level='INFO',
+        format='<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level}</level> | <cyan>{message}</cyan>'
+    )
+    logger.add(
+        'logs/training.log',
+        level='INFO',
+        rotation='1 MB',
+        encoding='utf-8',
+        format='{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}'
+    )
+
+
+setup_logger()
 
 # 設定隨機種子
 np.random.seed(42)
@@ -23,15 +45,15 @@ torch.backends.cudnn.benchmark = False
 data_path = 'datasets/'
 
 # 載入資料
-print("載入資料...")
+logger.info('載入資料...')
 air_visit, air_reserve, hpg_reserve, air_store, hpg_store, store_relation, date_info = load_data(data_path)
-print("資料載入完成。")
+logger.info('資料載入完成。')
 
 # 預處理
 data = preprocess_data(air_visit, air_reserve, hpg_reserve, air_store, hpg_store, store_relation, date_info)
 
 # 基本探索
-print(f"訪客人數統計:\n{data['visitors'].describe()}")
+logger.info(f"訪客人數統計:\n{data['visitors'].describe()}")
 
 # 繪圖：訪客人數分布
 plt.figure(figsize=(10, 6))
@@ -40,6 +62,7 @@ plt.title('Visitor Count Distribution')
 plt.xlabel('Visitors')
 plt.ylabel('Frequency')
 plt.savefig('visitors_distribution.png')
+logger.info('已輸出圖表: visitors_distribution.png')
 plt.show()
 
 # 特徵和目標
@@ -70,14 +93,14 @@ y_train = train_data[target]
 X_test = test_data[features]
 y_test = test_data[target]
 
-print(f"訓練資料形狀: {X_train.shape}")
-print(f"測試資料形狀: {X_test.shape}")
+logger.info(f'訓練資料形狀: {X_train.shape}')
+logger.info(f'測試資料形狀: {X_test.shape}')
 
 # 題意要求：測試集中店休日(0 visitors)不納入評分
 test_open_mask = y_test > 0
 X_test_open = X_test[test_open_mask]
 y_test_open = y_test[test_open_mask]
-print(f"測試評分樣本(排除 0 visitors): {X_test_open.shape[0]}")
+logger.info(f'測試評分樣本(排除 0 visitors): {X_test_open.shape[0]}')
 
 # 建立 models 資料夾
 os.makedirs('models', exist_ok=True)
@@ -110,7 +133,7 @@ X_test_seq, y_test_seq = create_sequences(test_data, sequence_length, features, 
 
 for model_name in models_to_train:
     try:
-        print(f"\n訓練 {model_name}...")
+        logger.info(f'訓練 {model_name}...')
         if model_name == 'linear':
             model = train_linear(X_train, y_train, f'models/{model_name}_model.pkl')
             train_rmsle = evaluate_model(model, X_train, y_train, model_name)
@@ -135,8 +158,8 @@ for model_name in models_to_train:
             train_rmsle = evaluate_model(model, X_train_seq, y_train_seq, model_name)
             test_rmsle = evaluate_model(model, X_test_seq_open, y_test_seq_open, model_name)
 
-        print(f"{model_name} Train RMSLE: {train_rmsle}")
-        print(f"{model_name} Test RMSLE: {test_rmsle}")
+        logger.info(f'{model_name} Train RMSLE: {train_rmsle}')
+        logger.info(f'{model_name} Test RMSLE: {test_rmsle}')
 
         results.append({
             'Model': model_name,
@@ -144,9 +167,9 @@ for model_name in models_to_train:
             'Test_RMSLE': test_rmsle
         })
     except Exception as e:
-        print(f"訓練 {model_name} 時發生錯誤: {e}")
+        logger.exception(f'訓練 {model_name} 時發生錯誤: {e}')
         continue
 
 save_results(results)
-print("結果已儲存到 results.csv")
-print("模型已儲存到 models/ 資料夾")
+logger.info('結果已儲存到 results.csv')
+logger.info('模型已儲存到 models/ 資料夾')

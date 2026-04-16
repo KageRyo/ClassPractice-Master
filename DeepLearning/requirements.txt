@@ -16,5 +16,8 @@ xgboost==3.2.0
 # 資料驗證
 pydantic==2.13.1
 
-#繪圖
+# 繪圖
 matplotlib==3.10.8
+
+# 日誌紀錄
+loguru==0.7.3
