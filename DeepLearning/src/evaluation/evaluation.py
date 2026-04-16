@@ -6,6 +6,8 @@ import pandas as pd
 import joblib
 
 def rmsle(y_true, y_pred):
+    y_true = np.maximum(np.asarray(y_true), 0)
+    y_pred = np.maximum(np.asarray(y_pred), 0)
     return np.sqrt(mean_squared_log_error(y_true + 1, y_pred + 1))
 
 def evaluate_model(model, X_test, y_test, model_type='xgb'):

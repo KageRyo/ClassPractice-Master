@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from src.data.data_loading import load_data
 from src.preprocessing.preprocessing import preprocess_data
-from src.models.models_training import train_xgb, train_linear, train_rf, train_mlp
+from src.models.models_training import train_xgb, train_linear, train_rf, train_mlp, train_lstm
 from src.evaluation.evaluation import rmsle, evaluate_model, save_results
 import os
 
@@ -42,6 +42,10 @@ target = 'visitors'
 train_data = data[data['year'] == 2016]
 test_data = data[data['year'] == 2017]
 
+# 依店家與日期排序，避免時間序列跨店家串接
+train_data = train_data.sort_values(['air_store_id', 'visit_date']).reset_index(drop=True)
+test_data = test_data.sort_values(['air_store_id', 'visit_date']).reset_index(drop=True)
+
 X_train = train_data[features]
 y_train = train_data[target]
 X_test = test_data[features]
@@ -61,9 +65,19 @@ results = []
 sequence_length = 7
 def create_sequences(data, seq_length, features, target):
     X, y = [], []
-    for i in range(len(data) - seq_length):
-        X.append(data.iloc[i:i+seq_length][features].values)
-        y.append(data.iloc[i+seq_length][target])
+
+    # 逐店家建立序列，避免不同店家的時間點被接在同一個序列
+    for _, store_data in data.groupby('air_store_id'):
+        store_data = store_data.sort_values('visit_date').reset_index(drop=True)
+        if len(store_data) <= seq_length:
+            continue
+
+        store_features = store_data[features].values
+        store_targets = store_data[target].values
+        for i in range(len(store_data) - seq_length):
+            X.append(store_features[i:i+seq_length])
+            y.append(store_targets[i+seq_length])
+
     return np.array(X), np.array(y)
 
 X_train_seq, y_train_seq = create_sequences(train_data, sequence_length, features, target)
