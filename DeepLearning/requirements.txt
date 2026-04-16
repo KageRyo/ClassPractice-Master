@@ -1,20 +1,20 @@
 # 專案管理
-git-filter-repo
+git-filter-repo==2.47.0
 
 # 資料前處理
-pandas
-numpy
+pandas==3.0.2
+numpy==2.4.4
 
 # 機器學習與深度學習
-scikit-learn
-torch
-torchvision
-torchaudio
-seaborn
-xgboost
+scikit-learn==1.8.0
+torch==2.11.0
+torchvision==0.26.0
+torchaudio==2.11.0
+seaborn==0.13.2
+xgboost==3.2.0
 
 # 資料驗證
-pydantic
+pydantic==2.13.1
 
 #繪圖
-matplotlib
+matplotlib==3.10.8
