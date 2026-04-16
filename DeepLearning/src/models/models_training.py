@@ -11,6 +11,15 @@ from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 import joblib
 
+
+def _compute_weighted_mse(preds, targets, peak_weight=1.0, peak_threshold=None):
+    if peak_weight <= 1.0 or peak_threshold is None:
+        return F.mse_loss(preds, targets)
+
+    weights = torch.ones_like(targets)
+    weights = torch.where(targets >= peak_threshold, torch.full_like(weights, peak_weight), weights)
+    return torch.mean(weights * (preds - targets) ** 2)
+
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, output_size):
         super(LSTMModel, self).__init__()
@@ -247,10 +256,16 @@ def train_mlp(
     min_epochs_before_stop=0,
     early_stopping_enabled=True,
     lr=1e-3,
+    peak_weight=1.0,
+    peak_quantile=0.8,
 ):
     y_train_arr = y_train.values.astype(np.float32)
     if target_transform == 'log1p':
         y_train_arr = np.log1p(np.clip(y_train_arr, a_min=0, a_max=None))
+
+    peak_threshold = None
+    if peak_weight > 1.0:
+        peak_threshold = float(np.quantile(y_train_arr, peak_quantile))
 
     X_train_tensor = torch.tensor(X_train.values, dtype=torch.float32)
     y_train_tensor = torch.tensor(y_train_arr, dtype=torch.float32)
@@ -286,7 +301,10 @@ def train_mlp(
             y_batch = y_batch.to(device)
             optimizer.zero_grad()
             outputs = model(X_batch)
-            loss = criterion(outputs.squeeze(), y_batch)
+            if peak_threshold is None:
+                loss = criterion(outputs.squeeze(), y_batch)
+            else:
+                loss = _compute_weighted_mse(outputs.squeeze(), y_batch, peak_weight=peak_weight, peak_threshold=peak_threshold)
             loss.backward()
             optimizer.step()
 
@@ -402,10 +420,16 @@ def _train_sequence_regressor(
     target_transform='none',
     min_epochs_before_stop=0,
     early_stopping_enabled=True,
+    peak_weight=1.0,
+    peak_quantile=0.8,
 ):
     y_train_arr = np.asarray(y_train_seq, dtype=np.float32)
     if target_transform == 'log1p':
         y_train_arr = np.log1p(np.clip(y_train_arr, a_min=0, a_max=None))
+
+    peak_threshold = None
+    if peak_weight > 1.0:
+        peak_threshold = float(np.quantile(y_train_arr, peak_quantile))
 
     X_train_tensor = torch.tensor(X_train_seq, dtype=torch.float32)
     y_train_tensor = torch.tensor(y_train_arr, dtype=torch.float32)
@@ -440,7 +464,10 @@ def _train_sequence_regressor(
             y_batch = y_batch.to(device)
             optimizer.zero_grad()
             outputs = model(X_batch)
-            loss = criterion(outputs.squeeze(), y_batch)
+            if peak_threshold is None:
+                loss = criterion(outputs.squeeze(), y_batch)
+            else:
+                loss = _compute_weighted_mse(outputs.squeeze(), y_batch, peak_weight=peak_weight, peak_threshold=peak_threshold)
             loss.backward()
             optimizer.step()
 
@@ -520,6 +547,8 @@ def train_optimized_lstm(
     target_transform='none',
     min_epochs_before_stop=0,
     early_stopping_enabled=True,
+    peak_weight=1.0,
+    peak_quantile=0.8,
 ):
     model = OptimizedLSTMModel(
         input_size=input_size,
@@ -546,6 +575,8 @@ def train_optimized_lstm(
         target_transform=target_transform,
         min_epochs_before_stop=min_epochs_before_stop,
         early_stopping_enabled=early_stopping_enabled,
+        peak_weight=peak_weight,
+        peak_quantile=peak_quantile,
     )
 
 
@@ -565,6 +596,8 @@ def train_cnn1d(
     target_transform='none',
     min_epochs_before_stop=0,
     early_stopping_enabled=True,
+    peak_weight=1.0,
+    peak_quantile=0.8,
 ):
     model = CNN1DModel(
         input_size=input_size,
@@ -590,6 +623,8 @@ def train_cnn1d(
         target_transform=target_transform,
         min_epochs_before_stop=min_epochs_before_stop,
         early_stopping_enabled=early_stopping_enabled,
+        peak_weight=peak_weight,
+        peak_quantile=peak_quantile,
     )
 
 
@@ -608,6 +643,8 @@ def train_transformer(
     target_transform='none',
     min_epochs_before_stop=0,
     early_stopping_enabled=True,
+    peak_weight=1.0,
+    peak_quantile=0.8,
 ):
     model = TimeSeriesTransformerModel(
         input_size=input_size,
@@ -635,6 +672,8 @@ def train_transformer(
         target_transform=target_transform,
         min_epochs_before_stop=min_epochs_before_stop,
         early_stopping_enabled=early_stopping_enabled,
+        peak_weight=peak_weight,
+        peak_quantile=peak_quantile,
     )
 
 
@@ -654,6 +693,8 @@ def train_resnet1d(
     min_epochs_before_stop=0,
     early_stopping_enabled=True,
     lr=3e-4,
+    peak_weight=1.0,
+    peak_quantile=0.8,
 ):
     model = ResNet1DModel(
         input_size=input_size,
@@ -678,4 +719,6 @@ def train_resnet1d(
         target_transform=target_transform,
         min_epochs_before_stop=min_epochs_before_stop,
         early_stopping_enabled=early_stopping_enabled,
+        peak_weight=peak_weight,
+        peak_quantile=peak_quantile,
     )

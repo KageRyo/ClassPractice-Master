@@ -74,6 +74,8 @@ def parse_args():
     parser.add_argument('--target-transform', type=str, default='log1p', choices=['none', 'log1p'], help='Target transform used for neural models')
     parser.add_argument('--mlp-lr', type=float, default=1e-3, help='Learning rate for MLP')
     parser.add_argument('--resnet-lr', type=float, default=3e-4, help='Learning rate for ResNet1D')
+    parser.add_argument('--peak-weight', type=float, default=1.0, help='Sample weight multiplier for peak-demand targets in NN loss')
+    parser.add_argument('--peak-quantile', type=float, default=0.8, help='Quantile threshold to define peak-demand targets')
     parser.add_argument('--overfit-gap-threshold', type=float, default=0.08, help='Threshold of (Test_RMSLE - Train_RMSLE) to flag overfitting')
     parser.add_argument('--skip-plot', action='store_true', help='Disable matplotlib plotting')
     return parser.parse_args()
@@ -83,7 +85,9 @@ args = parse_args()
 
 
 def get_model_metadata(model_name, args_obj):
-    if model_name == 'linear':
+    model_type = model_name if isinstance(model_name, ModelTypeSchema) else ModelTypeSchema(str(model_name).lower())
+
+    if model_type == ModelTypeSchema.LINEAR:
         return ModelMetadataSchema(
             Num_Layers=1,
             Units='9 -> 1',
@@ -92,7 +96,7 @@ def get_model_metadata(model_name, args_obj):
             Cost_Function='MSE (least squares)',
             Epochs=1,
         )
-    if model_name == 'rf':
+    if model_type == ModelTypeSchema.RF:
         return ModelMetadataSchema(
             Num_Layers=0,
             Units='n_estimators=100',
@@ -101,7 +105,7 @@ def get_model_metadata(model_name, args_obj):
             Cost_Function='MSE criterion',
             Epochs=1,
         )
-    if model_name == 'xgb':
+    if model_type == ModelTypeSchema.XGB:
         return ModelMetadataSchema(
             Num_Layers=0,
             Units='n_estimators=100, max_depth=6',
@@ -110,7 +114,7 @@ def get_model_metadata(model_name, args_obj):
             Cost_Function='reg:squarederror (MSE)',
             Epochs=100,
         )
-    if model_name == 'lgbm':
+    if model_type == ModelTypeSchema.LGBM:
         return ModelMetadataSchema(
             Num_Layers=0,
             Units='n_estimators=300, num_leaves=31',
@@ -119,7 +123,7 @@ def get_model_metadata(model_name, args_obj):
             Cost_Function='L2/RMSE objective',
             Epochs=300,
         )
-    if model_name == 'catboost':
+    if model_type == ModelTypeSchema.CATBOOST:
         return ModelMetadataSchema(
             Num_Layers=0,
             Units='iterations=500, depth=6',
@@ -128,7 +132,7 @@ def get_model_metadata(model_name, args_obj):
             Cost_Function='RMSE',
             Epochs=500,
         )
-    if model_name == 'mlp':
+    if model_type == ModelTypeSchema.MLP:
         return ModelMetadataSchema(
             Num_Layers=2,
             Units=f'input_dim -> {args_obj.mlp_hidden_size} -> 1',
@@ -137,7 +141,7 @@ def get_model_metadata(model_name, args_obj):
             Cost_Function='MSELoss',
             Epochs=args_obj.mlp_epochs,
         )
-    if model_name == 'lstm':
+    if model_type == ModelTypeSchema.LSTM:
         return ModelMetadataSchema(
             Num_Layers=args_obj.lstm_num_layers + 1,
             Units=f'LSTM(hidden={args_obj.lstm_hidden_size}, layers={args_obj.lstm_num_layers}) -> BN -> Dropout(0.3) -> FC(1)',
@@ -146,7 +150,7 @@ def get_model_metadata(model_name, args_obj):
             Cost_Function='MSELoss',
             Epochs=args_obj.lstm_epochs,
         )
-    if model_name == 'cnn1d':
+    if model_type == ModelTypeSchema.CNN1D:
         return ModelMetadataSchema(
             Num_Layers=6,
             Units='Conv1d(64) -> MaxPool -> Conv1d(128) -> MaxPool -> Dropout(0.3) -> FC(1)',
@@ -155,7 +159,7 @@ def get_model_metadata(model_name, args_obj):
             Cost_Function='MSELoss',
             Epochs=args_obj.cnn_epochs,
         )
-    if model_name == 'resnet1d':
+    if model_type == ModelTypeSchema.RESNET1D:
         return ModelMetadataSchema(
             Num_Layers=8,
             Units='Stem(Conv64) + ResidualBlocks(64,128,128) + GAP + FC(1)',
@@ -164,7 +168,7 @@ def get_model_metadata(model_name, args_obj):
             Cost_Function='MSELoss',
             Epochs=args_obj.resnet_epochs,
         )
-    if model_name == 'transformer':
+    if model_type == ModelTypeSchema.TRANSFORMER:
         return ModelMetadataSchema(
             Num_Layers=2,
             Units='InputProjection(64) + TransformerEncoder(nhead=4, layers=2) + GAP + FC(1)',
@@ -173,7 +177,7 @@ def get_model_metadata(model_name, args_obj):
             Cost_Function='MSELoss',
             Epochs=args_obj.transformer_epochs,
         )
-    raise ValueError(f'Unsupported model for metadata: {model_name}')
+    raise ValueError(f'Unsupported model for metadata: {model_type.value}')
 
 
 def write_exam_summary(results_df, output_path='best_model_summary.md'):
@@ -336,11 +340,14 @@ invalid_models = [m for m in models_to_train if m not in allowed_models]
 if invalid_models:
     raise ValueError(f'Unsupported models: {invalid_models}. Allowed: {sorted(allowed_models)}')
 
+model_types_to_train = [ModelTypeSchema(model_name) for model_name in models_to_train]
+
 logger.info(
-    f'本次訓練設定 | models={models_to_train} | mlp_epochs={args.mlp_epochs} '
+    f'本次訓練設定 | models={[m.value for m in model_types_to_train]} | mlp_epochs={args.mlp_epochs} '
     f'| lstm_epochs={args.lstm_epochs} | sequence_length={args.sequence_length} '
     f'| val_start_date={args.val_start_date} | early_stopping_patience={args.early_stopping_patience} '
-    f'| min_epochs_before_stop={args.min_epochs_before_stop} | early_stopping_enabled={not args.disable_early_stopping}'
+    f'| min_epochs_before_stop={args.min_epochs_before_stop} | early_stopping_enabled={not args.disable_early_stopping} '
+    f'| peak_weight={args.peak_weight} | peak_quantile={args.peak_quantile}'
 )
 
 results = []
@@ -395,34 +402,35 @@ logger.info(
     f'target_transform={args.target_transform}'
 )
 
-if {'lstm', 'cnn1d', 'resnet1d', 'transformer'} & set(models_to_train):
+if {ModelTypeSchema.LSTM, ModelTypeSchema.CNN1D, ModelTypeSchema.RESNET1D, ModelTypeSchema.TRANSFORMER} & set(model_types_to_train):
     logger.info(f'Sequence samples | train={len(X_train_seq)}, test={len(X_test_seq)}')
 
-for model_name in models_to_train:
+for model_type in model_types_to_train:
     try:
+        model_name = model_type.value
         model_start = time.perf_counter()
         logger.info(f'訓練 {model_name}...')
-        if model_name == 'linear':
+        if model_type == ModelTypeSchema.LINEAR:
             model = train_linear(X_train, y_train, f'models/{model_name}_model.pkl')
             train_metrics = evaluate_regression_metrics(model, X_train, y_train, model_name)
             test_metrics = evaluate_regression_metrics(model, X_test_open, y_test_open, model_name)
-        elif model_name == 'rf':
+        elif model_type == ModelTypeSchema.RF:
             model = train_rf(X_train, y_train, f'models/{model_name}_model.pkl')
             train_metrics = evaluate_regression_metrics(model, X_train, y_train, model_name)
             test_metrics = evaluate_regression_metrics(model, X_test_open, y_test_open, model_name)
-        elif model_name == 'xgb':
+        elif model_type == ModelTypeSchema.XGB:
             model = train_xgb(X_train, y_train, f'models/{model_name}_model.pkl')
             train_metrics = evaluate_regression_metrics(model, X_train, y_train, model_name)
             test_metrics = evaluate_regression_metrics(model, X_test_open, y_test_open, model_name)
-        elif model_name == 'lgbm':
+        elif model_type == ModelTypeSchema.LGBM:
             model = train_lgbm(X_train, y_train, f'models/{model_name}_model.pkl')
             train_metrics = evaluate_regression_metrics(model, X_train, y_train, model_name)
             test_metrics = evaluate_regression_metrics(model, X_test_open, y_test_open, model_name)
-        elif model_name == 'catboost':
+        elif model_type == ModelTypeSchema.CATBOOST:
             model = train_catboost(X_train, y_train, f'models/{model_name}_model.pkl')
             train_metrics = evaluate_regression_metrics(model, X_train, y_train, model_name)
             test_metrics = evaluate_regression_metrics(model, X_test_open, y_test_open, model_name)
-        elif model_name == 'mlp':
+        elif model_type == ModelTypeSchema.MLP:
             model = train_mlp(
                 X_train_fit,
                 y_train_fit,
@@ -439,10 +447,12 @@ for model_name in models_to_train:
                 min_epochs_before_stop=args.min_epochs_before_stop,
                 early_stopping_enabled=(not args.disable_early_stopping),
                 lr=args.mlp_lr,
+                peak_weight=args.peak_weight,
+                peak_quantile=args.peak_quantile,
             )
             train_metrics = evaluate_regression_metrics(model, X_train, y_train, model_name)
             test_metrics = evaluate_regression_metrics(model, X_test_open, y_test_open, model_name)
-        elif model_name == 'lstm':
+        elif model_type == ModelTypeSchema.LSTM:
             model = train_lstm(
                 X_train_seq_fit,
                 y_train_seq_fit,
@@ -459,13 +469,15 @@ for model_name in models_to_train:
                 target_transform=args.target_transform,
                 min_epochs_before_stop=args.min_epochs_before_stop,
                 early_stopping_enabled=(not args.disable_early_stopping),
+                peak_weight=args.peak_weight,
+                peak_quantile=args.peak_quantile,
             )
             test_seq_open_mask = y_test_seq > 0
             X_test_seq_open = X_test_seq[test_seq_open_mask]
             y_test_seq_open = y_test_seq[test_seq_open_mask]
             train_metrics = evaluate_regression_metrics(model, X_train_seq, y_train_seq, model_name)
             test_metrics = evaluate_regression_metrics(model, X_test_seq_open, y_test_seq_open, model_name)
-        elif model_name == 'cnn1d':
+        elif model_type == ModelTypeSchema.CNN1D:
             model = train_cnn1d(
                 X_train_seq_fit,
                 y_train_seq_fit,
@@ -481,13 +493,15 @@ for model_name in models_to_train:
                 target_transform=args.target_transform,
                 min_epochs_before_stop=args.min_epochs_before_stop,
                 early_stopping_enabled=(not args.disable_early_stopping),
+                peak_weight=args.peak_weight,
+                peak_quantile=args.peak_quantile,
             )
             test_seq_open_mask = y_test_seq > 0
             X_test_seq_open = X_test_seq[test_seq_open_mask]
             y_test_seq_open = y_test_seq[test_seq_open_mask]
             train_metrics = evaluate_regression_metrics(model, X_train_seq, y_train_seq, model_name)
             test_metrics = evaluate_regression_metrics(model, X_test_seq_open, y_test_seq_open, model_name)
-        elif model_name == 'resnet1d':
+        elif model_type == ModelTypeSchema.RESNET1D:
             model = train_resnet1d(
                 X_train_seq_fit,
                 y_train_seq_fit,
@@ -503,13 +517,15 @@ for model_name in models_to_train:
                 min_epochs_before_stop=args.min_epochs_before_stop,
                 early_stopping_enabled=(not args.disable_early_stopping),
                 lr=args.resnet_lr,
+                peak_weight=args.peak_weight,
+                peak_quantile=args.peak_quantile,
             )
             test_seq_open_mask = y_test_seq > 0
             X_test_seq_open = X_test_seq[test_seq_open_mask]
             y_test_seq_open = y_test_seq[test_seq_open_mask]
             train_metrics = evaluate_regression_metrics(model, X_train_seq, y_train_seq, model_name)
             test_metrics = evaluate_regression_metrics(model, X_test_seq_open, y_test_seq_open, model_name)
-        elif model_name == 'transformer':
+        elif model_type == ModelTypeSchema.TRANSFORMER:
             model = train_transformer(
                 X_train_seq_fit,
                 y_train_seq_fit,
@@ -524,6 +540,8 @@ for model_name in models_to_train:
                 target_transform=args.target_transform,
                 min_epochs_before_stop=args.min_epochs_before_stop,
                 early_stopping_enabled=(not args.disable_early_stopping),
+                peak_weight=args.peak_weight,
+                peak_quantile=args.peak_quantile,
             )
             test_seq_open_mask = y_test_seq > 0
             X_test_seq_open = X_test_seq[test_seq_open_mask]
@@ -541,7 +559,7 @@ for model_name in models_to_train:
         elapsed = time.perf_counter() - model_start
         logger.info(f'{model_name} 訓練耗時: {elapsed:.2f}s')
 
-        meta = get_model_metadata(model_name, args)
+        meta = get_model_metadata(model_type, args)
         overfit_gap = float(test_metrics['RMSLE'] - train_metrics['RMSLE'])
         overfit_flag = OverfittingFlagSchema.YES.value if overfit_gap > args.overfit_gap_threshold else OverfittingFlagSchema.NO.value
 
