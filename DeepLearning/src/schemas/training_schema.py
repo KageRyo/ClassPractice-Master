@@ -11,6 +11,7 @@ class ModelTypeSchema(Enum):
     MLP = "mlp"
     LSTM = "lstm"
     CNN1D = "cnn1d"
+    RESNET1D = "resnet1d"
     TRANSFORMER = "transformer"
 
 

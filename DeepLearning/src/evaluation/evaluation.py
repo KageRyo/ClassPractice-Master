@@ -15,7 +15,9 @@ def predict_model(model, X_test, model_type='xgb'):
     if model_type in ['xgb', 'linear', 'rf', 'lgbm', 'catboost']:
         return np.asarray(model.predict(X_test))
 
-    if model_type in ['mlp', 'lstm', 'cnn1d', 'transformer']:
+    if model_type in ['mlp', 'lstm', 'cnn1d', 'resnet1d', 'transformer']:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        model = model.to(device)
         model.eval()
         if model_type == 'mlp':
             X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
@@ -27,7 +29,9 @@ def predict_model(model, X_test, model_type='xgb'):
         test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
         y_pred = []
         with torch.no_grad():
-            for X_batch, _ in test_loader:
+            for X_batch, y_batch in test_loader:
+                X_batch = X_batch.to(device)
+                y_batch = y_batch.to(device)
                 preds = model(X_batch)
                 y_pred.extend(np.atleast_1d(np.maximum(preds.squeeze().cpu().numpy(), 0)))
         return np.asarray(y_pred)
@@ -81,22 +85,27 @@ def load_model(model_type, path):
         return joblib.load(path)
     elif model_type == 'mlp':
         from src.models.models_training import MLPModel
-        model = MLPModel(input_size=9, hidden_size=64, output_size=1)
+        model = MLPModel(input_size=14, hidden_size=64, output_size=1)
         model.load_state_dict(torch.load(path))
         return model
     elif model_type == 'lstm':
         from src.models.models_training import OptimizedLSTMModel
-        model = OptimizedLSTMModel(input_size=9, hidden_size=64, num_layers=2, output_size=1)
+        model = OptimizedLSTMModel(input_size=14, hidden_size=64, num_layers=2, output_size=1)
         model.load_state_dict(torch.load(path))
         return model
     elif model_type == 'cnn1d':
         from src.models.models_training import CNN1DModel
-        model = CNN1DModel(input_size=9, sequence_length=7, output_size=1)
+        model = CNN1DModel(input_size=14, sequence_length=7, output_size=1)
+        model.load_state_dict(torch.load(path))
+        return model
+    elif model_type == 'resnet1d':
+        from src.models.models_training import ResNet1DModel
+        model = ResNet1DModel(input_size=14, output_size=1)
         model.load_state_dict(torch.load(path))
         return model
     elif model_type == 'transformer':
         from src.models.models_training import TimeSeriesTransformerModel
-        model = TimeSeriesTransformerModel(input_size=9, d_model=64, nhead=4, num_layers=2, output_size=1)
+        model = TimeSeriesTransformerModel(input_size=14, d_model=64, nhead=4, num_layers=2, output_size=1)
         model.load_state_dict(torch.load(path))
         return model
 

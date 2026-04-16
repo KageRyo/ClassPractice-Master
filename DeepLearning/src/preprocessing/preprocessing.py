@@ -57,11 +57,29 @@ def preprocess_data(air_visit, air_reserve, hpg_reserve, air_store, hpg_store, s
     data['dayofweek'] = data['visit_date'].dt.dayofweek
     data['is_holiday'] = data['holiday_flg']
 
-    numeric_fill_cols = ['latitude', 'longitude', 'reserve_visitors', 'month', 'day', 'dayofweek']
+    data = data.sort_values(['air_store_id', 'visit_date']).reset_index(drop=True)
+    grouped = data.groupby('air_store_id')
+
+    # Leakage-safe temporal features: only use historical values up to t-1.
+    data['visitors_lag_1'] = grouped['visitors'].shift(1)
+    data['visitors_lag_7'] = grouped['visitors'].shift(7)
+    data['visitors_lag_14'] = grouped['visitors'].shift(14)
+    data['visitors_roll_mean_7'] = grouped['visitors'].transform(
+        lambda s: s.shift(1).rolling(window=7, min_periods=1).mean()
+    )
+    data['visitors_roll_std_7'] = grouped['visitors'].transform(
+        lambda s: s.shift(1).rolling(window=7, min_periods=1).std()
+    )
+
+    numeric_fill_cols = [
+        'latitude', 'longitude', 'reserve_visitors', 'month', 'day', 'dayofweek',
+        'visitors_lag_1', 'visitors_lag_7', 'visitors_lag_14',
+        'visitors_roll_mean_7', 'visitors_roll_std_7',
+    ]
     for col in numeric_fill_cols:
         data[col] = data[col].fillna(0)
 
-    return data.sort_values(['air_store_id', 'visit_date']).reset_index(drop=True)
+    return data
 
 
 def create_sliding_window_sequences(data, seq_length, features, target):

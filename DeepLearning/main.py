@@ -22,6 +22,7 @@ from src.models.models_training import (
     train_mlp,
     train_lstm,
     train_cnn1d,
+    train_resnet1d,
     train_transformer,
     train_lgbm,
     train_catboost,
@@ -55,11 +56,12 @@ setup_logger()
 def parse_args():
     parser = argparse.ArgumentParser(description='Restaurant visitors training pipeline')
     parser.add_argument('--data-path', type=str, default='datasets/', help='Path to dataset directory')
-    parser.add_argument('--models', type=str, default='linear,rf,xgb,lgbm,catboost,mlp,lstm,cnn1d,transformer', help='Comma-separated model list')
+    parser.add_argument('--models', type=str, default='mlp,resnet1d', help='Comma-separated model list')
     parser.add_argument('--sequence-length', type=int, default=7, help='Sequence length for LSTM')
     parser.add_argument('--mlp-epochs', type=int, default=100, help='Training epochs for MLP')
     parser.add_argument('--lstm-epochs', type=int, default=30, help='Training epochs for LSTM')
     parser.add_argument('--cnn-epochs', type=int, default=30, help='Training epochs for CNN1D')
+    parser.add_argument('--resnet-epochs', type=int, default=30, help='Training epochs for ResNet1D')
     parser.add_argument('--transformer-epochs', type=int, default=30, help='Training epochs for Transformer')
     parser.add_argument('--mlp-hidden-size', type=int, default=64, help='Hidden size for MLP')
     parser.add_argument('--lstm-hidden-size', type=int, default=64, help='Hidden size for LSTM')
@@ -122,8 +124,8 @@ def get_model_metadata(model_name, args_obj):
     if model_name == 'mlp':
         return ModelMetadataSchema(
             Num_Layers=2,
-            Units=f'9 -> {args_obj.mlp_hidden_size} -> 1',
-            Activation='ReLU (hidden)',
+            Units=f'input_dim -> {args_obj.mlp_hidden_size} -> 1',
+            Activation='ReLU (hidden) + Softplus output',
             Loss_Function='MSELoss',
             Cost_Function='MSELoss',
             Epochs=args_obj.mlp_epochs,
@@ -131,7 +133,7 @@ def get_model_metadata(model_name, args_obj):
     if model_name == 'lstm':
         return ModelMetadataSchema(
             Num_Layers=args_obj.lstm_num_layers + 1,
-            Units=f'OptimizedLSTM(hidden={args_obj.lstm_hidden_size}, layers={args_obj.lstm_num_layers}) -> BN -> Dropout(0.3) -> FC(1)',
+            Units=f'LSTM(hidden={args_obj.lstm_hidden_size}, layers={args_obj.lstm_num_layers}) -> BN -> Dropout(0.3) -> FC(1)',
             Activation='LSTM gates + ReLU output',
             Loss_Function='MSELoss',
             Cost_Function='MSELoss',
@@ -145,6 +147,15 @@ def get_model_metadata(model_name, args_obj):
             Loss_Function='MSELoss',
             Cost_Function='MSELoss',
             Epochs=args_obj.cnn_epochs,
+        )
+    if model_name == 'resnet1d':
+        return ModelMetadataSchema(
+            Num_Layers=8,
+            Units='Stem(Conv64) + ResidualBlocks(64,128,128) + GAP + FC(1)',
+            Activation='ReLU + residual skip connections + Softplus output',
+            Loss_Function='MSELoss',
+            Cost_Function='MSELoss',
+            Epochs=args_obj.resnet_epochs,
         )
     if model_name == 'transformer':
         return ModelMetadataSchema(
@@ -235,7 +246,12 @@ else:
     logger.info('已略過訪客分布圖輸出 (--skip-plot)')
 
 # 特徵和目標
-features = ['reserve_visitors', 'air_genre_name', 'air_area_name', 'latitude', 'longitude', 'month', 'day', 'dayofweek', 'is_holiday']
+features = [
+    'reserve_visitors', 'air_genre_name', 'air_area_name', 'latitude', 'longitude',
+    'month', 'day', 'dayofweek', 'is_holiday',
+    'visitors_lag_1', 'visitors_lag_7', 'visitors_lag_14',
+    'visitors_roll_mean_7', 'visitors_roll_std_7',
+]
 target = 'visitors'
 
 # 分割訓練和測試 (2016 訓練, 2017 測試)
@@ -263,7 +279,11 @@ data = data.sort_values(['air_store_id', 'visit_date']).reset_index(drop=True)
 data['air_genre_name'] = data['air_genre_name'].astype(str).map(genre_mapping).fillna(-1).astype(int)
 data['air_area_name'] = data['air_area_name'].astype(str).map(area_mapping).fillna(-1).astype(int)
 
-continuous_features = ['reserve_visitors', 'latitude', 'longitude', 'month', 'day', 'dayofweek']
+continuous_features = [
+    'reserve_visitors', 'latitude', 'longitude', 'month', 'day', 'dayofweek',
+    'visitors_lag_1', 'visitors_lag_7', 'visitors_lag_14',
+    'visitors_roll_mean_7', 'visitors_roll_std_7',
+]
 train_data, test_data, scaler = fit_standard_scaler(train_data, test_data, continuous_features)
 
 X_train = train_data[features]
@@ -326,7 +346,7 @@ X_test_seq = transform_sequences_with_scaler(
 y_train_seq = seq_split['y_train_seq']
 y_test_seq = seq_split['y_test_seq']
 
-if {'lstm', 'cnn1d', 'transformer'} & set(models_to_train):
+if {'lstm', 'cnn1d', 'resnet1d', 'transformer'} & set(models_to_train):
     logger.info(f'Sequence samples | train={len(X_train_seq)}, test={len(X_test_seq)}')
 
 for model_name in models_to_train:
@@ -390,6 +410,21 @@ for model_name in models_to_train:
                 input_size=len(features),
                 sequence_length=sequence_length,
                 num_epochs=args.cnn_epochs,
+                log_interval=args.nn_log_interval,
+                progress_callback=lambda msg: logger.info(msg),
+                save_path=f'models/{model_name}_model.pth'
+            )
+            test_seq_open_mask = y_test_seq > 0
+            X_test_seq_open = X_test_seq[test_seq_open_mask]
+            y_test_seq_open = y_test_seq[test_seq_open_mask]
+            train_metrics = evaluate_regression_metrics(model, X_train_seq, y_train_seq, model_name)
+            test_metrics = evaluate_regression_metrics(model, X_test_seq_open, y_test_seq_open, model_name)
+        elif model_name == 'resnet1d':
+            model = train_resnet1d(
+                X_train_seq,
+                y_train_seq,
+                input_size=len(features),
+                num_epochs=args.resnet_epochs,
                 log_interval=args.nn_log_interval,
                 progress_callback=lambda msg: logger.info(msg),
                 save_path=f'models/{model_name}_model.pth'

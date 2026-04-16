@@ -72,6 +72,64 @@ class CNN1DModel(nn.Module):
         return F.relu(x)
 
 
+class ResidualBlock1D(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, dropout=0.2):
+        super().__init__()
+        padding = kernel_size // 2
+        self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)
+        self.bn1 = nn.BatchNorm1d(out_channels)
+        self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size=kernel_size, padding=padding)
+        self.bn2 = nn.BatchNorm1d(out_channels)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+        self.shortcut = (
+            nn.Identity()
+            if in_channels == out_channels
+            else nn.Conv1d(in_channels, out_channels, kernel_size=1)
+        )
+
+    def forward(self, x):
+        residual = self.shortcut(x)
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.dropout(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = out + residual
+        out = self.relu(out)
+        return out
+
+
+class ResNet1DModel(nn.Module):
+    def __init__(self, input_size, output_size=1, dropout=0.2):
+        super().__init__()
+        self.stem = nn.Sequential(
+            nn.Conv1d(input_size, 64, kernel_size=3, padding=1),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+        )
+        self.block1 = ResidualBlock1D(64, 64, kernel_size=3, dropout=dropout)
+        self.block2 = ResidualBlock1D(64, 128, kernel_size=3, dropout=dropout)
+        self.block3 = ResidualBlock1D(128, 128, kernel_size=3, dropout=dropout)
+        self.global_pool = nn.AdaptiveAvgPool1d(1)
+        self.head = nn.Sequential(
+            nn.Flatten(),
+            nn.Dropout(dropout),
+            nn.Linear(128, output_size),
+        )
+
+    def forward(self, x):
+        x = x.transpose(1, 2)
+        x = self.stem(x)
+        x = self.block1(x)
+        x = self.block2(x)
+        x = self.block3(x)
+        x = self.global_pool(x)
+        x = self.head(x)
+        return F.softplus(x)
+
+
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=1000):
         super().__init__()
@@ -124,7 +182,7 @@ class MLPModel(nn.Module):
         out = self.fc1(x)
         out = self.relu(out)
         out = self.fc2(out)
-        return F.relu(out)
+        return F.softplus(out)
 
 def train_xgb(X_train, y_train, save_path='models/xgb_model.pkl'):
     model = xgb.XGBRegressor(objective='reg:squarederror', n_estimators=100, learning_rate=0.1, max_depth=6)
@@ -186,7 +244,9 @@ def train_mlp(
     train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = MLPModel(input_size, hidden_size, 1)
+    model = model.to(device)
     criterion = nn.MSELoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
@@ -194,6 +254,8 @@ def train_mlp(
     for epoch in range(num_epochs):
         running_loss = 0.0
         for X_batch, y_batch in train_loader:
+            X_batch = X_batch.to(device)
+            y_batch = y_batch.to(device)
             optimizer.zero_grad()
             outputs = model(X_batch)
             loss = criterion(outputs.squeeze(), y_batch)
@@ -244,19 +306,25 @@ def _train_sequence_regressor(
     progress_callback=None,
     save_path='models/sequence_model.pth',
     model_name='SequenceModel',
+    lr=1e-3,
+    weight_decay=1e-4,
 ):
     X_train_tensor = torch.tensor(X_train_seq, dtype=torch.float32)
     y_train_tensor = torch.tensor(y_train_seq, dtype=torch.float32)
     train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
     criterion = nn.MSELoss()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
 
     for epoch in range(num_epochs):
         running_loss = 0.0
         for X_batch, y_batch in train_loader:
+            X_batch = X_batch.to(device)
+            y_batch = y_batch.to(device)
             optimizer.zero_grad()
             outputs = model(X_batch)
             loss = criterion(outputs.squeeze(), y_batch)
@@ -304,6 +372,8 @@ def train_optimized_lstm(
         progress_callback=progress_callback,
         save_path=save_path,
         model_name='OptimizedLSTM',
+        lr=1e-3,
+        weight_decay=1e-4,
     )
 
 
@@ -332,6 +402,8 @@ def train_cnn1d(
         progress_callback=progress_callback,
         save_path=save_path,
         model_name='CNN1D',
+        lr=1e-3,
+        weight_decay=1e-4,
     )
 
 
@@ -361,4 +433,34 @@ def train_transformer(
         progress_callback=progress_callback,
         save_path=save_path,
         model_name='Transformer',
+        lr=1e-3,
+        weight_decay=1e-4,
+    )
+
+
+def train_resnet1d(
+    X_train_seq,
+    y_train_seq,
+    input_size,
+    num_epochs=40,
+    log_interval=5,
+    progress_callback=None,
+    save_path='models/resnet1d_model.pth',
+):
+    model = ResNet1DModel(
+        input_size=input_size,
+        output_size=1,
+        dropout=0.1,
+    )
+    return _train_sequence_regressor(
+        model=model,
+        X_train_seq=X_train_seq,
+        y_train_seq=y_train_seq,
+        num_epochs=num_epochs,
+        log_interval=log_interval,
+        progress_callback=progress_callback,
+        save_path=save_path,
+        model_name='ResNet1D',
+        lr=3e-4,
+        weight_decay=1e-4,
     )
