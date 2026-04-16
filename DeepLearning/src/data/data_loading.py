@@ -1,5 +1,5 @@
 import pandas as pd
-from src.schemas.models_schema import StoreInfo, VisitData, ReserveData, DateInfo
+from src.schemas.data_schema import StoreInfoSchema, VisitDataSchema, ReserveDataSchema, DateInfoSchema
 
 def load_data(data_path: str):
     air_visit = pd.read_csv(data_path + 'air_visit_data.csv')
