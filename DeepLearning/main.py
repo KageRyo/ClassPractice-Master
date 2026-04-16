@@ -21,6 +21,8 @@ from src.models.models_training import (
     train_rf,
     train_mlp,
     train_lstm,
+    train_cnn1d,
+    train_transformer,
     train_lgbm,
     train_catboost,
 )
@@ -53,10 +55,12 @@ setup_logger()
 def parse_args():
     parser = argparse.ArgumentParser(description='Restaurant visitors training pipeline')
     parser.add_argument('--data-path', type=str, default='datasets/', help='Path to dataset directory')
-    parser.add_argument('--models', type=str, default='linear,rf,xgb,lgbm,catboost,mlp,lstm', help='Comma-separated model list')
+    parser.add_argument('--models', type=str, default='linear,rf,xgb,lgbm,catboost,mlp,lstm,cnn1d,transformer', help='Comma-separated model list')
     parser.add_argument('--sequence-length', type=int, default=7, help='Sequence length for LSTM')
     parser.add_argument('--mlp-epochs', type=int, default=100, help='Training epochs for MLP')
     parser.add_argument('--lstm-epochs', type=int, default=30, help='Training epochs for LSTM')
+    parser.add_argument('--cnn-epochs', type=int, default=30, help='Training epochs for CNN1D')
+    parser.add_argument('--transformer-epochs', type=int, default=30, help='Training epochs for Transformer')
     parser.add_argument('--mlp-hidden-size', type=int, default=64, help='Hidden size for MLP')
     parser.add_argument('--lstm-hidden-size', type=int, default=64, help='Hidden size for LSTM')
     parser.add_argument('--lstm-num-layers', type=int, default=2, help='Number of LSTM layers')
@@ -132,6 +136,24 @@ def get_model_metadata(model_name, args_obj):
             Loss_Function='MSELoss',
             Cost_Function='MSELoss',
             Epochs=args_obj.lstm_epochs,
+        )
+    if model_name == 'cnn1d':
+        return ModelMetadataSchema(
+            Num_Layers=6,
+            Units='Conv1d(64) -> MaxPool -> Conv1d(128) -> MaxPool -> Dropout(0.3) -> FC(1)',
+            Activation='ReLU + ReLU output clamp',
+            Loss_Function='MSELoss',
+            Cost_Function='MSELoss',
+            Epochs=args_obj.cnn_epochs,
+        )
+    if model_name == 'transformer':
+        return ModelMetadataSchema(
+            Num_Layers=2,
+            Units='InputProjection(64) + TransformerEncoder(nhead=4, layers=2) + GAP + FC(1)',
+            Activation='GELU (encoder) + ReLU output clamp',
+            Loss_Function='MSELoss',
+            Cost_Function='MSELoss',
+            Epochs=args_obj.transformer_epochs,
         )
     raise ValueError(f'Unsupported model for metadata: {model_name}')
 
@@ -304,7 +326,7 @@ X_test_seq = transform_sequences_with_scaler(
 y_train_seq = seq_split['y_train_seq']
 y_test_seq = seq_split['y_test_seq']
 
-if 'lstm' in models_to_train:
+if {'lstm', 'cnn1d', 'transformer'} & set(models_to_train):
     logger.info(f'Sequence samples | train={len(X_train_seq)}, test={len(X_test_seq)}')
 
 for model_name in models_to_train:
@@ -352,6 +374,37 @@ for model_name in models_to_train:
                 hidden_size=args.lstm_hidden_size,
                 num_layers=args.lstm_num_layers,
                 num_epochs=args.lstm_epochs,
+                log_interval=args.nn_log_interval,
+                progress_callback=lambda msg: logger.info(msg),
+                save_path=f'models/{model_name}_model.pth'
+            )
+            test_seq_open_mask = y_test_seq > 0
+            X_test_seq_open = X_test_seq[test_seq_open_mask]
+            y_test_seq_open = y_test_seq[test_seq_open_mask]
+            train_metrics = evaluate_regression_metrics(model, X_train_seq, y_train_seq, model_name)
+            test_metrics = evaluate_regression_metrics(model, X_test_seq_open, y_test_seq_open, model_name)
+        elif model_name == 'cnn1d':
+            model = train_cnn1d(
+                X_train_seq,
+                y_train_seq,
+                input_size=len(features),
+                sequence_length=sequence_length,
+                num_epochs=args.cnn_epochs,
+                log_interval=args.nn_log_interval,
+                progress_callback=lambda msg: logger.info(msg),
+                save_path=f'models/{model_name}_model.pth'
+            )
+            test_seq_open_mask = y_test_seq > 0
+            X_test_seq_open = X_test_seq[test_seq_open_mask]
+            y_test_seq_open = y_test_seq[test_seq_open_mask]
+            train_metrics = evaluate_regression_metrics(model, X_train_seq, y_train_seq, model_name)
+            test_metrics = evaluate_regression_metrics(model, X_test_seq_open, y_test_seq_open, model_name)
+        elif model_name == 'transformer':
+            model = train_transformer(
+                X_train_seq,
+                y_train_seq,
+                input_size=len(features),
+                num_epochs=args.transformer_epochs,
                 log_interval=args.nn_log_interval,
                 progress_callback=lambda msg: logger.info(msg),
                 save_path=f'models/{model_name}_model.pth'

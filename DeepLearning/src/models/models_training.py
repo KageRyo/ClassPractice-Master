@@ -1,6 +1,7 @@
 import xgboost as xgb
 import lightgbm as lgb
 from catboost import CatBoostRegressor
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -48,6 +49,68 @@ class OptimizedLSTMModel(nn.Module):
         out = self.dropout(out)
         out = self.fc(out)
         return F.relu(out)
+
+
+class CNN1DModel(nn.Module):
+    def __init__(self, input_size, sequence_length, output_size=1, dropout=0.3):
+        super().__init__()
+        self.conv1 = nn.Conv1d(in_channels=input_size, out_channels=64, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
+        self.relu = nn.ReLU()
+        self.pool = nn.MaxPool1d(kernel_size=2)
+        pooled_len = max(1, sequence_length // 4)
+        self.dropout = nn.Dropout(dropout)
+        self.fc = nn.Linear(128 * pooled_len, output_size)
+
+    def forward(self, x):
+        x = x.transpose(1, 2)
+        x = self.pool(self.relu(self.conv1(x)))
+        x = self.pool(self.relu(self.conv2(x)))
+        x = torch.flatten(x, 1)
+        x = self.dropout(x)
+        x = self.fc(x)
+        return F.relu(x)
+
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=1000):
+        super().__init__()
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe.unsqueeze(0))
+
+    def forward(self, x):
+        return x + self.pe[:, :x.size(1), :]
+
+
+class TimeSeriesTransformerModel(nn.Module):
+    def __init__(self, input_size, d_model=64, nhead=4, num_layers=2, dropout=0.3, output_size=1):
+        super().__init__()
+        self.input_projection = nn.Linear(input_size, d_model)
+        self.positional_encoding = PositionalEncoding(d_model)
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=nhead,
+            dropout=dropout,
+            batch_first=True,
+            dim_feedforward=256,
+            activation='gelu',
+        )
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.dropout = nn.Dropout(dropout)
+        self.fc = nn.Linear(d_model, output_size)
+
+    def forward(self, x):
+        x = self.input_projection(x)
+        x = self.positional_encoding(x)
+        x = self.transformer_encoder(x)
+        x = x.mean(dim=1)
+        x = self.dropout(x)
+        x = self.fc(x)
+        return F.relu(x)
 
 
 class MLPModel(nn.Module):
@@ -241,4 +304,61 @@ def train_optimized_lstm(
         progress_callback=progress_callback,
         save_path=save_path,
         model_name='OptimizedLSTM',
+    )
+
+
+def train_cnn1d(
+    X_train_seq,
+    y_train_seq,
+    input_size,
+    sequence_length,
+    num_epochs=40,
+    log_interval=5,
+    progress_callback=None,
+    save_path='models/cnn1d_model.pth',
+):
+    model = CNN1DModel(
+        input_size=input_size,
+        sequence_length=sequence_length,
+        output_size=1,
+        dropout=0.3,
+    )
+    return _train_sequence_regressor(
+        model=model,
+        X_train_seq=X_train_seq,
+        y_train_seq=y_train_seq,
+        num_epochs=num_epochs,
+        log_interval=log_interval,
+        progress_callback=progress_callback,
+        save_path=save_path,
+        model_name='CNN1D',
+    )
+
+
+def train_transformer(
+    X_train_seq,
+    y_train_seq,
+    input_size,
+    num_epochs=40,
+    log_interval=5,
+    progress_callback=None,
+    save_path='models/transformer_model.pth',
+):
+    model = TimeSeriesTransformerModel(
+        input_size=input_size,
+        d_model=64,
+        nhead=4,
+        num_layers=2,
+        dropout=0.3,
+        output_size=1,
+    )
+    return _train_sequence_regressor(
+        model=model,
+        X_train_seq=X_train_seq,
+        y_train_seq=y_train_seq,
+        num_epochs=num_epochs,
+        log_interval=log_interval,
+        progress_callback=progress_callback,
+        save_path=save_path,
+        model_name='Transformer',
     )

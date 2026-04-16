@@ -10,6 +10,8 @@ class ModelTypeSchema(Enum):
     CATBOOST = "catboost"
     MLP = "mlp"
     LSTM = "lstm"
+    CNN1D = "cnn1d"
+    TRANSFORMER = "transformer"
 
 
 class OverfittingFlagSchema(Enum):
