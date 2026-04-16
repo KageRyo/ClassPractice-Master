@@ -51,3 +51,16 @@
 
 1. 目前直接執行 `python main.py` 時，預設只會訓練 `mlp,resnet1d`。
 2. 其他模型（如 lgbm/lstm/cnn1d/transformer）需透過 `--models` 參數手動指定。
+
+近期改善作法與觀察：
+
+1. 特徵工程：新增每店鋪 `visitors_lag_1/7/14` 與 `visitors_roll_mean_7/visitors_roll_std_7`。
+2. 模型穩定化：將 MLP/ResNet1D 輸出改為 Softplus，避免 ReLU 輸出層造成梯度截斷與全零預測。
+3. ResNet1D 優化：降低預設 learning rate（3e-4）並調整 dropout，改善訓練崩壞問題。
+4. 訓練策略：神經網路支援 validation split、early stopping 與 `log1p` target transform。
+
+目前觀察（2026-04-16）：
+
+1. ResNet1D 在新特徵與穩定化設定下可大幅優於舊版設定。
+2. MLP 仍是穩定 baseline，適合與 ResNet1D 做快速 A/B 比較。
+3. 下一步建議優先搜尋 `sequence_length` 與 early stopping patience，再調整模型深度。
