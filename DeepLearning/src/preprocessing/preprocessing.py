@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import LabelEncoder
 
 def preprocess_data(air_visit, air_reserve, hpg_reserve, air_store, hpg_store, store_relation, date_info):
     # 日期處理
@@ -40,11 +39,5 @@ def preprocess_data(air_visit, air_reserve, hpg_reserve, air_store, hpg_store, s
     data['day'] = data['visit_date'].dt.day
     data['dayofweek'] = data['visit_date'].dt.dayofweek
     data['is_holiday'] = data['holiday_flg']
-
-    # 編碼類別特徵
-    le_genre = LabelEncoder()
-    le_area = LabelEncoder()
-    data['air_genre_name'] = le_genre.fit_transform(data['air_genre_name'])
-    data['air_area_name'] = le_area.fit_transform(data['air_area_name'])
 
     return data

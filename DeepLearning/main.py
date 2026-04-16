@@ -39,12 +39,23 @@ features = ['reserve_visitors', 'air_genre_name', 'air_area_name', 'latitude', '
 target = 'visitors'
 
 # 分割訓練和測試 (2016 訓練, 2017 測試)
-train_data = data[data['year'] == 2016]
-test_data = data[data['year'] == 2017]
+train_data = data[data['year'] == 2016].copy()
+test_data = data[data['year'] == 2017].copy()
 
 # 依店家與日期排序，避免時間序列跨店家串接
 train_data = train_data.sort_values(['air_store_id', 'visit_date']).reset_index(drop=True)
 test_data = test_data.sort_values(['air_store_id', 'visit_date']).reset_index(drop=True)
+
+def encode_with_train_mapping(train_df, test_df, col_name):
+    train_values = train_df[col_name].astype(str)
+    test_values = test_df[col_name].astype(str)
+    mapping = {value: idx for idx, value in enumerate(sorted(train_values.unique()))}
+    train_df[col_name] = train_values.map(mapping).astype(int)
+    test_df[col_name] = test_values.map(mapping).fillna(-1).astype(int)
+
+# 只使用訓練集建立類別編碼，避免資料洩漏
+encode_with_train_mapping(train_data, test_data, 'air_genre_name')
+encode_with_train_mapping(train_data, test_data, 'air_area_name')
 
 X_train = train_data[features]
 y_train = train_data[target]
