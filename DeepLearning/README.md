@@ -64,3 +64,15 @@
 1. ResNet1D 在新特徵與穩定化設定下可大幅優於舊版設定。
 2. MLP 仍是穩定 baseline，適合與 ResNet1D 做快速 A/B 比較。
 3. 下一步建議優先搜尋 `sequence_length` 與 early stopping patience，再調整模型深度。
+
+可調參數（神經網路）：
+
+1. `--mlp-lr`：MLP learning rate（預設 `1e-3`）。
+2. `--resnet-lr`：ResNet1D learning rate（預設 `3e-4`）。
+3. `--disable-early-stopping`：完全關閉 early stopping。
+4. `--min-epochs-before-stop`：設定 early stopping 最少啟動 epoch。
+
+自動化搜尋：
+
+1. 可直接使用 [scripts/grid_search_mlp_resnet.sh](scripts/grid_search_mlp_resnet.sh) 進行 `sequence_length x lr` 搜尋。
+2. 結果會輸出到 `grid_search_runs/grid_summary.csv`，並保留每次 run 的 `results.csv` 與 `best_model_summary.md`。

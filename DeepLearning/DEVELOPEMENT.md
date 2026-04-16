@@ -32,8 +32,20 @@ python main.py --models lgbm,mlp,lstm,cnn1d,resnet1d,transformer --skip-plot
 python main.py --models mlp,resnet1d --mlp-epochs 100 --resnet-epochs 100 --skip-plot --target-transform log1p --val-start-date 2016-10-01 --early-stopping-patience 12
 ```
 
+完整跑滿 100 epochs（關閉 early stopping）：
+
+```bash
+python main.py --models mlp,resnet1d --mlp-epochs 100 --resnet-epochs 100 --skip-plot --target-transform log1p --val-start-date 2016-10-01 --disable-early-stopping
+```
+
 若要關閉 target transform：
 
 ```bash
 python main.py --models mlp,resnet1d --skip-plot --target-transform none
+```
+
+小型超參數搜尋（sequence_length x lr）：
+
+```bash
+bash scripts/grid_search_mlp_resnet.sh
 ```
