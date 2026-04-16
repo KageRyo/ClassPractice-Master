@@ -29,7 +29,7 @@ def predict_model(model, X_test, model_type='xgb'):
         with torch.no_grad():
             for X_batch, _ in test_loader:
                 preds = model(X_batch)
-                y_pred.extend(np.atleast_1d(preds.squeeze().cpu().numpy()))
+                y_pred.extend(np.atleast_1d(np.maximum(preds.squeeze().cpu().numpy(), 0)))
         return np.asarray(y_pred)
 
     raise ValueError(f'Unsupported model_type: {model_type}')
@@ -85,8 +85,8 @@ def load_model(model_type, path):
         model.load_state_dict(torch.load(path))
         return model
     elif model_type == 'lstm':
-        from src.models.models_training import LSTMModel
-        model = LSTMModel(input_size=9, hidden_size=64, num_layers=2, output_size=1)
+        from src.models.models_training import OptimizedLSTMModel
+        model = OptimizedLSTMModel(input_size=9, hidden_size=64, num_layers=2, output_size=1)
         model.load_state_dict(torch.load(path))
         return model
 

@@ -8,8 +8,22 @@ import argparse
 import time
 from loguru import logger
 from src.data.data_loading import load_data
-from src.preprocessing.preprocessing import preprocess_data
-from src.models.models_training import train_xgb, train_linear, train_rf, train_mlp, train_lstm, train_lgbm, train_catboost
+from src.preprocessing.preprocessing import (
+    preprocess_data,
+    create_sliding_window_sequences,
+    split_sequences_by_target_year,
+    fit_standard_scaler,
+    transform_sequences_with_scaler,
+)
+from src.models.models_training import (
+    train_xgb,
+    train_linear,
+    train_rf,
+    train_mlp,
+    train_lstm,
+    train_lgbm,
+    train_catboost,
+)
 from src.evaluation.evaluation import evaluate_regression_metrics, save_results
 from src.schemas.training_schema import ModelTypeSchema, OverfittingFlagSchema, TrainingResultSchema, ModelMetadataSchema
 import os
@@ -113,8 +127,8 @@ def get_model_metadata(model_name, args_obj):
     if model_name == 'lstm':
         return ModelMetadataSchema(
             Num_Layers=args_obj.lstm_num_layers + 1,
-            Units=f'LSTM(hidden={args_obj.lstm_hidden_size}, layers={args_obj.lstm_num_layers}) -> FC(1)',
-            Activation='LSTM gates + Linear output',
+            Units=f'OptimizedLSTM(hidden={args_obj.lstm_hidden_size}, layers={args_obj.lstm_num_layers}) -> BN -> Dropout(0.3) -> FC(1)',
+            Activation='LSTM gates + ReLU output',
             Loss_Function='MSELoss',
             Cost_Function='MSELoss',
             Epochs=args_obj.lstm_epochs,
@@ -216,10 +230,19 @@ def encode_with_train_mapping(train_df, test_df, col_name):
     mapping = {value: idx for idx, value in enumerate(sorted(train_values.unique()))}
     train_df[col_name] = train_values.map(mapping).astype(int)
     test_df[col_name] = test_values.map(mapping).fillna(-1).astype(int)
+    return mapping
 
 # 只使用訓練集建立類別編碼，避免資料洩漏
-encode_with_train_mapping(train_data, test_data, 'air_genre_name')
-encode_with_train_mapping(train_data, test_data, 'air_area_name')
+genre_mapping = encode_with_train_mapping(train_data, test_data, 'air_genre_name')
+area_mapping = encode_with_train_mapping(train_data, test_data, 'air_area_name')
+
+# 將編碼映射套用回完整資料，供先建序列再切分使用
+data = data.sort_values(['air_store_id', 'visit_date']).reset_index(drop=True)
+data['air_genre_name'] = data['air_genre_name'].astype(str).map(genre_mapping).fillna(-1).astype(int)
+data['air_area_name'] = data['air_area_name'].astype(str).map(area_mapping).fillna(-1).astype(int)
+
+continuous_features = ['reserve_visitors', 'latitude', 'longitude', 'month', 'day', 'dayofweek']
+train_data, test_data, scaler = fit_standard_scaler(train_data, test_data, continuous_features)
 
 X_train = train_data[features]
 y_train = train_data[target]
@@ -258,28 +281,31 @@ def add_prefix(metric_dict, prefix):
 
 # 準備序列 for LSTM
 sequence_length = args.sequence_length
-def create_sequences(data, seq_length, features, target):
-    X, y = [], []
+X_all_seq, y_all_seq, seq_target_dates, _ = create_sliding_window_sequences(
+    data=data,
+    seq_length=sequence_length,
+    features=features,
+    target=target,
+)
+seq_split = split_sequences_by_target_year(
+    X=X_all_seq,
+    y=y_all_seq,
+    target_dates=seq_target_dates,
+    train_years=(2016,),
+    test_year=2017,
+)
 
-    # 逐店家建立序列，避免不同店家的時間點被接在同一個序列
-    for _, store_data in data.groupby('air_store_id'):
-        store_data = store_data.sort_values('visit_date').reset_index(drop=True)
-        if len(store_data) <= seq_length:
-            continue
-
-        store_features = store_data[features].values
-        store_targets = store_data[target].values
-        for i in range(len(store_data) - seq_length):
-            X.append(store_features[i:i+seq_length])
-            y.append(store_targets[i+seq_length])
-
-    return np.array(X), np.array(y)
-
-X_train_seq, y_train_seq = create_sequences(train_data, sequence_length, features, target)
-X_test_seq, y_test_seq = create_sequences(test_data, sequence_length, features, target)
+X_train_seq = transform_sequences_with_scaler(
+    seq_split['X_train_seq'], features=features, continuous_cols=continuous_features, scaler=scaler
+)
+X_test_seq = transform_sequences_with_scaler(
+    seq_split['X_test_seq'], features=features, continuous_cols=continuous_features, scaler=scaler
+)
+y_train_seq = seq_split['y_train_seq']
+y_test_seq = seq_split['y_test_seq']
 
 if 'lstm' in models_to_train:
-    logger.info(f'LSTM 序列樣本數 | train={len(X_train_seq)}, test={len(X_test_seq)}')
+    logger.info(f'Sequence samples | train={len(X_train_seq)}, test={len(X_test_seq)}')
 
 for model_name in models_to_train:
     try:
@@ -335,7 +361,6 @@ for model_name in models_to_train:
             y_test_seq_open = y_test_seq[test_seq_open_mask]
             train_metrics = evaluate_regression_metrics(model, X_train_seq, y_train_seq, model_name)
             test_metrics = evaluate_regression_metrics(model, X_test_seq_open, y_test_seq_open, model_name)
-
         logger.info(
             f"{model_name} Train | RMSLE={train_metrics['RMSLE']:.6f} RMSE={train_metrics['RMSE']:.6f} "
             f"MAE={train_metrics['MAE']:.6f} R2={train_metrics['R2']:.6f} PeakRecall={train_metrics['Peak_Recall']:.6f}"

@@ -127,6 +127,8 @@ dmypy.json
 
 # Project specific
 models/
+!src/models/
+!src/models/*.py
 results.csv
 visitors_distribution.png
 best_model_summary.md
