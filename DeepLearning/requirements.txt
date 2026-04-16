@@ -1,1 +1,20 @@
+# 專案管理
 git-filter-repo
+
+# 資料前處理
+pandas
+numpy
+
+# 機器學習與深度學習
+scikit-learn
+torch
+torchvision
+torchaudio
+seaborn
+xgboost
+
+# 資料驗證
+pydantic
+
+#繪圖
+matplotlib
