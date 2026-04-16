@@ -244,6 +244,9 @@ def train_mlp(
     patience=12,
     min_delta=1e-4,
     target_transform='none',
+    min_epochs_before_stop=0,
+    early_stopping_enabled=True,
+    lr=1e-3,
 ):
     y_train_arr = y_train.values.astype(np.float32)
     if target_transform == 'log1p':
@@ -268,7 +271,7 @@ def train_mlp(
     model = MLPModel(input_size, hidden_size, 1)
     model = model.to(device)
     criterion = nn.MSELoss()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
 
     best_state = None
@@ -325,7 +328,12 @@ def train_mlp(
                     f"- Val MSE Loss: {val_loss:.6f} - LR: {lr:.6e}"
                 )
 
-        if val_loader is not None and stale_epochs >= patience:
+        if (
+            early_stopping_enabled
+            and val_loader is not None
+            and (epoch + 1) >= max(min_epochs_before_stop, 1)
+            and stale_epochs >= patience
+        ):
             if progress_callback:
                 progress_callback(f"MLP Early stopping at epoch {epoch + 1} (best monitor loss={best_score:.6f})")
             break
@@ -353,6 +361,8 @@ def train_lstm(
     patience=12,
     min_delta=1e-4,
     target_transform='none',
+    min_epochs_before_stop=0,
+    early_stopping_enabled=True,
 ):
     return train_optimized_lstm(
         X_train_seq=X_train_seq,
@@ -369,6 +379,8 @@ def train_lstm(
         patience=patience,
         min_delta=min_delta,
         target_transform=target_transform,
+        min_epochs_before_stop=min_epochs_before_stop,
+        early_stopping_enabled=early_stopping_enabled,
     )
 
 
@@ -388,6 +400,8 @@ def _train_sequence_regressor(
     patience=12,
     min_delta=1e-4,
     target_transform='none',
+    min_epochs_before_stop=0,
+    early_stopping_enabled=True,
 ):
     y_train_arr = np.asarray(y_train_seq, dtype=np.float32)
     if target_transform == 'log1p':
@@ -470,7 +484,12 @@ def _train_sequence_regressor(
                     f"- Val MSE Loss: {val_loss:.6f} - LR: {lr:.6e}"
                 )
 
-        if val_loader is not None and stale_epochs >= patience:
+        if (
+            early_stopping_enabled
+            and val_loader is not None
+            and (epoch + 1) >= max(min_epochs_before_stop, 1)
+            and stale_epochs >= patience
+        ):
             if progress_callback:
                 progress_callback(f"{model_name} Early stopping at epoch {epoch + 1} (best monitor loss={best_score:.6f})")
             break
@@ -499,6 +518,8 @@ def train_optimized_lstm(
     patience=12,
     min_delta=1e-4,
     target_transform='none',
+    min_epochs_before_stop=0,
+    early_stopping_enabled=True,
 ):
     model = OptimizedLSTMModel(
         input_size=input_size,
@@ -523,6 +544,8 @@ def train_optimized_lstm(
         patience=patience,
         min_delta=min_delta,
         target_transform=target_transform,
+        min_epochs_before_stop=min_epochs_before_stop,
+        early_stopping_enabled=early_stopping_enabled,
     )
 
 
@@ -540,6 +563,8 @@ def train_cnn1d(
     patience=12,
     min_delta=1e-4,
     target_transform='none',
+    min_epochs_before_stop=0,
+    early_stopping_enabled=True,
 ):
     model = CNN1DModel(
         input_size=input_size,
@@ -563,6 +588,8 @@ def train_cnn1d(
         patience=patience,
         min_delta=min_delta,
         target_transform=target_transform,
+        min_epochs_before_stop=min_epochs_before_stop,
+        early_stopping_enabled=early_stopping_enabled,
     )
 
 
@@ -579,6 +606,8 @@ def train_transformer(
     patience=12,
     min_delta=1e-4,
     target_transform='none',
+    min_epochs_before_stop=0,
+    early_stopping_enabled=True,
 ):
     model = TimeSeriesTransformerModel(
         input_size=input_size,
@@ -604,6 +633,8 @@ def train_transformer(
         patience=patience,
         min_delta=min_delta,
         target_transform=target_transform,
+        min_epochs_before_stop=min_epochs_before_stop,
+        early_stopping_enabled=early_stopping_enabled,
     )
 
 
@@ -620,6 +651,9 @@ def train_resnet1d(
     patience=12,
     min_delta=1e-4,
     target_transform='none',
+    min_epochs_before_stop=0,
+    early_stopping_enabled=True,
+    lr=3e-4,
 ):
     model = ResNet1DModel(
         input_size=input_size,
@@ -635,11 +669,13 @@ def train_resnet1d(
         progress_callback=progress_callback,
         save_path=save_path,
         model_name='ResNet1D',
-        lr=3e-4,
+        lr=lr,
         weight_decay=1e-4,
         X_val_seq=X_val_seq,
         y_val_seq=y_val_seq,
         patience=patience,
         min_delta=min_delta,
         target_transform=target_transform,
+        min_epochs_before_stop=min_epochs_before_stop,
+        early_stopping_enabled=early_stopping_enabled,
     )
