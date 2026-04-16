@@ -76,3 +76,41 @@
 
 1. 可直接使用 [scripts/grid_search_mlp_resnet.sh](scripts/grid_search_mlp_resnet.sh) 進行 `sequence_length x lr` 搜尋。
 2. 結果會輸出到 `grid_search_runs/grid_summary.csv`，並保留每次 run 的 `results.csv` 與 `best_model_summary.md`。
+
+模型取捨原因（為何聚焦 MLP 與 ResNet1D）：
+
+1. 傳統模型中僅保留 LGBM 做 baseline：可作為非深度學習基準，訓練速度快且穩定。
+2. 線性模型/隨機森林/部分 boosting 在本資料設定下測試表現明顯落後，且額外執行時間無法換取更好 RMSLE。
+3. MLP 作為穩定強 baseline：
+	- 對 tabular+時間衍生特徵通常表現穩定。
+	- 訓練時間較短，適合做大量參數比較。
+4. ResNet1D 作為主力序列模型：
+	- 殘差連線可改善深層網路訓練穩定性。
+	- 在加入 lag/rolling 特徵與輸出層穩定化後，測試指標可明顯提升。
+
+調校策略（方法與原因）：
+
+1. 先修資料再修模型：先補齊時間軸與特徵縮放，再做模型深度優化，避免把資料問題誤判成模型問題。
+2. 先建立穩定 baseline 再擴展：先跑 MLP，確認資料與評估流程正常，再導入 ResNet1D。
+3. 以可解釋小步驟迭代：每次只改 1~2 類變數（例如輸出激活或 learning rate），保留對照可追蹤性。
+4. 以 RMSLE 作主優化目標：配合 log1p target transform，讓訓練空間更對齊評分指標。
+
+已記錄的關鍵觀察：
+
+1. 輸出層激活函數影響很大：
+	- ReLU 輸出層曾造成預測偏零與 Peak Recall 偏低。
+	- 改為 Softplus 後，梯度更平滑且泛化更穩定。
+2. 時間特徵工程有效：
+	- 加入 lag/rolling 後，RMSLE 與 R2 同步改善。
+3. ResNet1D 需要較保守 learning rate：
+	- `3e-4` 相比 `1e-3` 更不容易出現訓練崩壞。
+4. 早停需謹慎：
+	- 過早觸發可能錯過後段收斂。
+	- 已提供可關閉 early stopping 與 minimum epoch 門檻參數。
+
+實驗紀錄建議：
+
+1. 每次訓練前先備份 `results.csv` 與 `best_model_summary.md`，避免 smoke test 覆蓋正式結果。
+2. 記錄至少以下欄位：
+	- 模型組合、sequence_length、learning rate、是否 early stopping、target transform。
+	- Test RMSLE、Test R2、Test Peak Recall、訓練時間。
