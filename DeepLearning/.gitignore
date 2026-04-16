@@ -129,5 +129,8 @@ dmypy.json
 models/
 results.csv
 visitors_distribution.png
+best_model_summary.md
+logs/
+catboost_info/
 *.pth
 *.pkl
