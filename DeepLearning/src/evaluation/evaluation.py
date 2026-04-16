@@ -26,7 +26,7 @@ def evaluate_model(model, X_test, y_test, model_type='xgb'):
         with torch.no_grad():
             for X_batch, _ in test_loader:
                 preds = model(X_batch)
-                y_pred.extend(preds.squeeze().numpy())
+                y_pred.extend(np.atleast_1d(preds.squeeze().cpu().numpy()))
         y_pred = np.array(y_pred)
     return rmsle(y_test, y_pred)
 
