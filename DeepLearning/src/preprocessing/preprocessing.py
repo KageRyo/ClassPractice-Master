@@ -120,6 +120,9 @@ def transform_sequences_with_scaler(X_seq, features, continuous_cols, scaler):
     continuous_indices = [features.index(col) for col in continuous_cols]
     reshaped = X_scaled.reshape(-1, len(features))
     reshaped_cont = reshaped[:, continuous_indices]
-    reshaped[:, continuous_indices] = scaler.transform(reshaped_cont)
+
+    # Keep feature names to avoid sklearn warning when scaler was fit on DataFrame columns.
+    reshaped_cont_df = pd.DataFrame(reshaped_cont, columns=continuous_cols)
+    reshaped[:, continuous_indices] = scaler.transform(reshaped_cont_df)
 
     return reshaped.reshape(X_scaled.shape)
