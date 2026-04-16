@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import random
+import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
 from src.data.data_loading import load_data
@@ -10,6 +12,12 @@ import os
 
 # 設定隨機種子
 np.random.seed(42)
+random.seed(42)
+torch.manual_seed(42)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(42)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 # 資料路徑
 data_path = 'datasets/'
