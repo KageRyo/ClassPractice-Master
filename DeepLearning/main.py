@@ -68,9 +68,6 @@ def parse_args():
     parser.add_argument('--lstm-num-layers', type=int, default=2, help='Number of LSTM layers')
     parser.add_argument('--nn-log-interval', type=int, default=5, help='Epoch interval for NN training logs')
     parser.add_argument('--val-start-date', type=str, default='2016-10-01', help='Validation split start date within training years')
-    parser.add_argument('--early-stopping-patience', type=int, default=12, help='Early stopping patience for neural models')
-    parser.add_argument('--min-epochs-before-stop', type=int, default=0, help='Minimum epochs before early stopping can trigger')
-    parser.add_argument('--disable-early-stopping', action='store_true', help='Disable early stopping for neural models')
     parser.add_argument('--target-transform', type=str, default='log1p', choices=['none', 'log1p'], help='Target transform used for neural models')
     parser.add_argument('--mlp-lr', type=float, default=1e-3, help='Learning rate for MLP')
     parser.add_argument('--resnet-lr', type=float, default=3e-4, help='Learning rate for ResNet1D')
@@ -345,8 +342,7 @@ model_types_to_train = [ModelTypeSchema(model_name) for model_name in models_to_
 logger.info(
     f'本次訓練設定 | models={[m.value for m in model_types_to_train]} | mlp_epochs={args.mlp_epochs} '
     f'| lstm_epochs={args.lstm_epochs} | sequence_length={args.sequence_length} '
-    f'| val_start_date={args.val_start_date} | early_stopping_patience={args.early_stopping_patience} '
-    f'| min_epochs_before_stop={args.min_epochs_before_stop} | early_stopping_enabled={not args.disable_early_stopping} '
+    f'| val_start_date={args.val_start_date} '
     f'| peak_weight={args.peak_weight} | peak_quantile={args.peak_quantile}'
 )
 
@@ -442,10 +438,7 @@ for model_type in model_types_to_train:
                 save_path=f'models/{model_name}_model.pth',
                 X_val=X_val,
                 y_val=y_val,
-                patience=args.early_stopping_patience,
                 target_transform=args.target_transform,
-                min_epochs_before_stop=args.min_epochs_before_stop,
-                early_stopping_enabled=(not args.disable_early_stopping),
                 lr=args.mlp_lr,
                 peak_weight=args.peak_weight,
                 peak_quantile=args.peak_quantile,
@@ -465,10 +458,7 @@ for model_type in model_types_to_train:
                 save_path=f'models/{model_name}_model.pth',
                 X_val_seq=X_val_seq,
                 y_val_seq=y_val_seq,
-                patience=args.early_stopping_patience,
                 target_transform=args.target_transform,
-                min_epochs_before_stop=args.min_epochs_before_stop,
-                early_stopping_enabled=(not args.disable_early_stopping),
                 peak_weight=args.peak_weight,
                 peak_quantile=args.peak_quantile,
             )
@@ -489,10 +479,7 @@ for model_type in model_types_to_train:
                 save_path=f'models/{model_name}_model.pth',
                 X_val_seq=X_val_seq,
                 y_val_seq=y_val_seq,
-                patience=args.early_stopping_patience,
                 target_transform=args.target_transform,
-                min_epochs_before_stop=args.min_epochs_before_stop,
-                early_stopping_enabled=(not args.disable_early_stopping),
                 peak_weight=args.peak_weight,
                 peak_quantile=args.peak_quantile,
             )
@@ -512,10 +499,7 @@ for model_type in model_types_to_train:
                 save_path=f'models/{model_name}_model.pth',
                 X_val_seq=X_val_seq,
                 y_val_seq=y_val_seq,
-                patience=args.early_stopping_patience,
                 target_transform=args.target_transform,
-                min_epochs_before_stop=args.min_epochs_before_stop,
-                early_stopping_enabled=(not args.disable_early_stopping),
                 lr=args.resnet_lr,
                 peak_weight=args.peak_weight,
                 peak_quantile=args.peak_quantile,
@@ -536,10 +520,7 @@ for model_type in model_types_to_train:
                 save_path=f'models/{model_name}_model.pth',
                 X_val_seq=X_val_seq,
                 y_val_seq=y_val_seq,
-                patience=args.early_stopping_patience,
                 target_transform=args.target_transform,
-                min_epochs_before_stop=args.min_epochs_before_stop,
-                early_stopping_enabled=(not args.disable_early_stopping),
                 peak_weight=args.peak_weight,
                 peak_quantile=args.peak_quantile,
             )
