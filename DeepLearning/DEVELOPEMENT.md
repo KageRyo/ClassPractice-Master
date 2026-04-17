@@ -35,10 +35,10 @@
 
 ### 2.3 模型與訓練迴圈
 
-- 新增序列模型：LSTM、CNN1D、Transformer、ResNet1D
+- 最終交付主流程收斂為：MLP + ResNet1D
 - 訓練優化：AdamW + ReduceLROnPlateau
-- 支援 validation split + early stopping（可關閉）
-- 支援 `min_epochs_before_stop`
+- 保留 validation split 監控訓練品質
+- 移除 early stopping 機制，固定跑滿指定 epochs
 - 支援 target transform：`none` / `log1p`
 - 支援 peak-weighted loss：`peak_weight` + `peak_quantile`
 - GPU/CPU 自動切換（訓練與推論）
@@ -54,7 +54,7 @@
 
 1. `mlp` 是穩定且快速的 baseline。
 2. `resnet1d` 在當前特徵與訓練策略下具更高上限。
-3. 實務上優先比較 `mlp,resnet1d`，再擴展到其他模型。
+3. 最終交付版固定使用 `mlp,resnet1d`，降低流程複雜度並提升可重現性。
 
 ## 5) 推薦執行流程
 
@@ -64,16 +64,10 @@
 python main.py --models mlp,resnet1d --skip-plot --target-transform log1p
 ```
 
-### 5.2 跑滿 epoch（關閉 early stopping）
+### 5.2 正式交付執行（固定跑滿 epoch）
 
 ```bash
-python main.py --models mlp,resnet1d --mlp-epochs 100 --resnet-epochs 100 --disable-early-stopping --skip-plot
-```
-
-### 5.3 小型網格搜尋
-
-```bash
-bash scripts/grid_search_mlp_resnet.sh
+python main.py --models mlp,resnet1d --mlp-epochs 100 --resnet-epochs 100 --sequence-length 14 --mlp-lr 0.001 --resnet-lr 0.0002 --target-transform log1p --val-start-date 2016-10-01 --skip-plot --nn-log-interval 5
 ```
 
 ## 6) 里程碑（Timeline）
@@ -83,12 +77,11 @@ bash scripts/grid_search_mlp_resnet.sh
 3. Phase 3: 訓練強化（AdamW、scheduler、GPU）
 4. Phase 4: 穩定性修正（Softplus 輸出、調整 ResNet lr）
 5. Phase 5: 特徵工程升級（lag/rolling）
-6. Phase 6: 泛化策略（validation + early stopping + log1p）
-7. Phase 7: 自動化搜尋（grid script）
+6. Phase 6: 泛化策略（validation + log1p）
+7. Phase 7: 最終交付收斂（移除 early stopping 與搜尋腳本）
 
 ## 7) 下一輪優化（依優先順序）
 
-1. 搜尋 `sequence_length`（7/14/21/28）
-2. 分開搜尋 MLP 與 ResNet1D learning rate
-3. 調整 peak-weighted loss，提升高峰樣本表現
-4. 多 seed 重跑（>= 3）並回報 mean/std
+1. 固定最終配置後以 3 個 seed 重跑，回報 mean/std
+2. 若仍需提升，優先新增特徵（reservation lag、holiday lead/lag）
+3. 最後才考慮增加模型深度或更長訓練 epoch

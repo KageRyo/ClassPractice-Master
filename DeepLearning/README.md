@@ -1,6 +1,6 @@
 # Deep Learning Midterm - Restaurant Visitors Forecasting
 
-本專案為期中考程式實作，主評估指標為 RMSLE（Root Mean Squared Log Error）。
+本專案最終交付版本以 RMSLE 為主指標，並固定主流程為 `mlp` 與 `resnet1d` 兩個模型比較。
 
 ## 1) 環境
 
@@ -12,24 +12,7 @@ conda activate dl-class
 pip install -r requirements.txt
 ```
 
-## 2) 專案結構
-
-- `main.py`: 主訓練與評估入口
-- `src/preprocessing/`: 前處理、序列切分、scaler
-- `src/models/`: 模型定義與訓練
-- `src/evaluation/`: 指標評估與結果輸出
-- `results.csv`: 每次訓練結果彙整
-- `best_model_summary.md`: 最佳模型摘要
-
-## 3) 快速執行
-
-預設只跑 `mlp,resnet1d`：
-
-```bash
-python main.py --skip-plot
-```
-
-完整 100 epochs（關閉 early stopping）：
+## 2) 一次跑完整最終版本
 
 ```bash
 python main.py \
@@ -41,36 +24,29 @@ python main.py \
   --resnet-lr 0.0002 \
   --target-transform log1p \
   --val-start-date 2016-10-01 \
-  --disable-early-stopping \
   --skip-plot \
   --nn-log-interval 5
 ```
 
-## 4) 重要參數
+## 3) 輸出檔案
 
-- `--models`: 模型清單（逗號分隔）
-- `--sequence-length`: 序列長度
-- `--target-transform`: `none` 或 `log1p`
-- `--mlp-lr`, `--resnet-lr`: 學習率
-- `--early-stopping-patience`, `--min-epochs-before-stop`
-- `--disable-early-stopping`
-- `--peak-weight`, `--peak-quantile`: 高峰樣本加權
+- `results.csv`: 本次所有模型評估結果
+- `best_model_summary.md`: 最佳模型摘要，可直接填報告
+- `models/`: 儲存模型權重檔
 
-## 5) 目前重點設定
+## 4) 目前保留的核心參數
 
-- 預設比較模型：`mlp` vs `resnet1d`
-- 測試評分排除 `visitors = 0`（closed days）
-- 神經模型支援 validation split、early stopping、log1p target transform、GPU 自動切換
+- `--models`: 僅支援 `mlp,resnet1d`
+- `--mlp-hidden-size`
+- `--mlp-epochs`, `--resnet-epochs`
+- `--sequence-length`
+- `--mlp-lr`, `--resnet-lr`
+- `--target-transform` (`none` or `log1p`)
+- `--val-start-date`
+- `--peak-weight`, `--peak-quantile`
 
-## 6) 自動化搜尋
+## 5) 文件對照
 
-```bash
-bash scripts/grid_search_mlp_resnet.sh
-```
-
-輸出於 `grid_search_runs/grid_summary.csv`。
-
-## 7) 文件分工
-
-- README: 快速上手與執行指令
-- `DEVELOPEMENT.md`: 完整調校歷程、方法原因、觀察與下一步
+- `README.md`: 交付版快速執行說明
+- `DEVELOPEMENT.md`: 方法、變更歷程、實驗觀察
+- `FINAL_SUBMISSION_GUIDE.md`: 最終繳交前檢查清單
