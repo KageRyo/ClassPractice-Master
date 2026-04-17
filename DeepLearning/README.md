@@ -43,6 +43,17 @@ python main.py \
 - `best_model_summary.md`: 最佳模型摘要，可直接填報告
 - `models/`: 儲存模型權重檔
 
+## 3.1) 最終鎖定結果（不再重跑）
+
+- Best Model: `resnet1d`
+- Train RMSLE: `0.558909`
+- Test RMSLE: `0.560029`
+- Train R2: `0.633555`
+- Test R2: `-0.973978`
+- Test Peak Recall: `0.446825`
+
+以上數值來自最終版 `results.csv` 與 `best_model_summary.md`，作為本次交付固定結果。
+
 ## 4) 目前保留的核心參數
 
 - `--models`: 僅支援 `mlp,resnet1d`

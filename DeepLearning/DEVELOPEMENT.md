@@ -63,6 +63,19 @@
 2. `resnet1d` 在當前特徵與訓練策略下具更高上限。
 3. 最終交付版固定使用 `mlp,resnet1d`，降低流程複雜度並提升可重現性。
 
+## 4.1) 最終提交結果（鎖定）
+
+- Best Model: `resnet1d`
+- Train RMSLE: `0.558909`
+- Test RMSLE: `0.560029`
+- Train RMSE: `9.927783`
+- Test RMSE: `23.959431`
+- Train R2: `0.633555`
+- Test R2: `-0.973978`
+- Overfit Gap: `0.001120`（Overfitting Risk: `No`）
+
+此結果對應目前 `results.csv` 與 `best_model_summary.md`，本專案不再進行新訓練，後續僅維持文件與程式可重現性。
+
 ## 5) 推薦執行流程
 
 ### 5.1 主要比較

@@ -1,36 +1,39 @@
 # Final Submission Guide
 
-## 1) 最終執行指令
+## 1) Locked Final Command
 
 ```bash
 conda activate dl-class
-python main.py \
-  --models mlp,resnet1d \
-  --mlp-epochs 100 \
-  --resnet-epochs 100 \
-  --sequence-length 14 \
-  --mlp-lr 0.001 \
-  --resnet-lr 0.0002 \
-  --target-transform log1p \
-  --val-start-date 2016-10-01 \
-  --nn-log-interval 5
+python main.py
 ```
 
-## 2) 交付前檢查
+`python main.py` defaults are already aligned with the final configuration:
+- models: `mlp,resnet1d`
+- epochs: 100/100
+- sequence length: 14
+- learning rate: `mlp=0.001`, `resnet1d=0.0002`
+- target transform: `log1p`
+- validation split start: `2016-10-01`
+- plotting: skipped by default
 
-- 確認 `results.csv` 已更新且有 `mlp`、`resnet1d` 兩行
-- 確認 `best_model_summary.md` 已更新
-- 確認 `models/` 內有本次訓練輸出的 `.pth` 檔
-- 確認 README 與 DEVELOPEMENT 文件內容與程式一致
+## 2) Final Outputs to Submit
 
-## 3) 報告可直接引用欄位
+- `results.csv`
+- `best_model_summary.md`
+- source code in this repository
 
-- 主指標：`Test_RMSLE`
-- 輔助指標：`Test_RMSE`, `Test_MAE`, `Test_R2`, `Test_Peak_Recall`
-- 風險指標：`Overfit_Gap`, `Overfitting_Flag`
+## 3) Locked Final Metrics
 
-## 4) 最終版範圍
+- Best Model: `resnet1d`
+- Train RMSLE: `0.558909`
+- Test RMSLE: `0.560029`
+- Train R2: `0.633555`
+- Test R2: `-0.973978`
+- Overfit Gap: `0.001120` (`No`)
 
-- 主入口：`main.py`
-- 核心模型：`mlp`, `resnet1d`
-- 已移除：early stopping 機制、搜尋腳本流程
+## 4) Pre-Submission Checklist
+
+- Confirm `results.csv` contains both `mlp` and `resnet1d`
+- Confirm `best_model_summary.md` matches the locked final run
+- Confirm report text in `Mid-Term Programming Exam.md` is filled
+- Confirm README and development notes are consistent with the code

@@ -78,60 +78,60 @@ Files are prefixed with `air_` or `hpg_` to indicate source. Each restaurant has
 ## Submission
 Submit your model code and fill in the following information in your report:
 
-Model Information (Final Selected Model: ResNet1D):
+Model Information (最終選擇模型：ResNet1D):
 - Model name: ResNet1D
 - Number of layers: 8
 - Number of units in each layer: Stem(Conv64) + ResidualBlocks(64,128,128) + GAP + FC(1)
 - Activation functions used: ReLU + residual skip connections + Softplus output
-- Loss function (for ResNet1D training):
-    - Mean Squared Error (MSE)
+- Loss function (ResNet1D 訓練):
+    - 平均平方誤差（Mean Squared Error, MSE）
     - L = (1/N) * sum_{i=1..N} (y_i - y_hat_i)^2
-- Cost function (for ResNet1D optimization target):
-    - Same as loss in this project (epoch-level average MSE)
+- Cost function (ResNet1D 優化目標):
+    - 本專案中 cost 與 loss 同義（每個 epoch 的平均 MSE）
     - J(theta) = (1/B) * sum_{b=1..B} L_b
 - Evaluation metric required by exam:
     - RMSLE = sqrt((1/N) * sum_{i=1..N} (log(1 + y_i) - log(1 + y_hat_i))^2)
 - Training epochs: 100
-- Training accuracy: N/A (project metric uses RMSLE; Train R2 = 63.36%)
-- Testing accuracy: N/A (project metric uses RMSLE; Test R2 = -97.40%)
+- Training accuracy: 不適用（本專案主指標為 RMSLE；Train R2 = 63.36%）
+- Testing accuracy: 不適用（本專案主指標為 RMSLE；Test R2 = -97.40%）
 - Optimization techniques employed:
-        1. Train-only feature scaling + full timeline reindex preprocessing
-        2. Feature engineering (visitors lag/rolling features)
-        3. Optimization and model architecture upgrades (AdamW + scheduler + Softplus + ResNet1D)
+        1. 僅用訓練資料做特徵縮放（train-only scaling）+ 完整時間軸 reindex 前處理
+        2. 特徵工程（visitors 的 lag/rolling 特徵）
+        3. 訓練與架構優化（AdamW + scheduler + Softplus + ResNet1D）
 
-Model Information (Baseline Comparison Model: MLP):
+Model Information (基準比較模型：MLP):
 - Model name: MLP
 - Number of layers: 2
 - Number of units in each layer: input_dim -> 64 -> 1
 - Activation functions used: ReLU (hidden) + Softplus output
-- Loss function (for MLP training):
-    - Mean Squared Error (MSE)
+- Loss function (MLP 訓練):
+    - 平均平方誤差（Mean Squared Error, MSE）
     - L = (1/N) * sum_{i=1..N} (y_i - y_hat_i)^2
-- Cost function (for MLP optimization target):
-    - Same as loss in this project (epoch-level average MSE)
+- Cost function (MLP 優化目標):
+    - 本專案中 cost 與 loss 同義（每個 epoch 的平均 MSE）
     - J(theta) = (1/B) * sum_{b=1..B} L_b
 - Evaluation metric required by exam:
     - RMSLE = sqrt((1/N) * sum_{i=1..N} (log(1 + y_i) - log(1 + y_hat_i))^2)
 
 Difference in accuracies after each optimization technique applied:
-1) Optimization technique name: Feature engineering (lag/rolling)  
-    - Before optimization: Training/Testing Accuracies = N/A / N/A (RMSLE workflow)  
-    - After optimization: Training/Testing Accuracies = N/A / N/A (RMSLE workflow)  
-    - Any other changes: Added `visitors_lag_1/7/14`, `visitors_roll_mean_7/std_7`; feature dimension from 9 to 14.
+1) Optimization technique name: 特徵工程（lag/rolling）  
+    - Before optimization: Training/Testing Accuracies = 不適用 / 不適用（RMSLE 流程）  
+    - After optimization: Training/Testing Accuracies = 不適用 / 不適用（RMSLE 流程）  
+    - Any other changes: 新增 `visitors_lag_1/7/14`, `visitors_roll_mean_7/std_7`；特徵維度由 9 增加到 14。
 
-2) Optimization technique name: Training stability upgrades  
-    - Before optimization: Training/Testing Accuracies = N/A / N/A (RMSLE workflow)  
-    - After optimization: Training/Testing Accuracies = N/A / N/A (RMSLE workflow)  
-    - Any other changes: Switched to AdamW + ReduceLROnPlateau, output activation to Softplus, target transform to log1p.
+2) Optimization technique name: 訓練穩定性升級  
+    - Before optimization: Training/Testing Accuracies = 不適用 / 不適用（RMSLE 流程）  
+    - After optimization: Training/Testing Accuracies = 不適用 / 不適用（RMSLE 流程）  
+    - Any other changes: 優化器改為 AdamW + ReduceLROnPlateau，輸出層改為 Softplus，target transform 使用 log1p。
 
-3) Optimization technique name: Final model selection (MLP vs ResNet1D)  
-    - Before optimization: Training/Testing Accuracies = Train/Test RMSLE = 0.578145 / 0.578952 (MLP baseline)  
-    - After optimization: Training/Testing Accuracies = Train/Test RMSLE = 0.558909 / 0.560029 (ResNet1D final)  
-    - Any other changes: ResNet1D selected as final model; overfit gap remains small (0.001120, Overfitting Risk = No).
+3) Optimization technique name: 最終模型篩選（MLP vs ResNet1D）  
+    - Before optimization: Training/Testing Accuracies = Train/Test RMSLE = 0.578145 / 0.578952（MLP 基準）  
+    - After optimization: Training/Testing Accuracies = Train/Test RMSLE = 0.558909 / 0.560029（ResNet1D 最終）  
+    - Any other changes: 最終選擇 ResNet1D；overfit gap 維持在小幅度（0.001120，Overfitting Risk = No）。
 
 Anything special about your model:  
-Final pipeline focuses on reproducibility and exam alignment: test scoring excludes closed days (`visitors=0`), preprocessing avoids leakage, and the training flow is locked to a stable two-model comparison (`mlp`, `resnet1d`).
+最終流程重點在可重現與題目對齊：測試評分排除 closed days（`visitors=0`）、前處理避免資料洩漏，並將訓練流程固定為穩定的雙模型比較（`mlp`, `resnet1d`）。
 
 Comments on the course:  
-The take-home format was practical and helped connect preprocessing quality, model architecture, and metric alignment in a real forecasting workflow.
+這次 take-home 形式很實用，能把前處理品質、模型架構設計與評估指標對齊，完整串成實際的時間序列預測流程。
 
