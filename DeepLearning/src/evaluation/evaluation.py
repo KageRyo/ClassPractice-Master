@@ -3,7 +3,6 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import mean_squared_log_error, r2_score
 import pandas as pd
-import joblib
 
 
 LOG1P_PRED_MAX = 8.0
@@ -14,40 +13,37 @@ def rmsle(y_true, y_pred):
     return np.sqrt(mean_squared_log_error(y_true + 1, y_pred + 1))
 
 
-def predict_model(model, X_test, model_type='xgb'):
-    if model_type in ['xgb', 'linear', 'rf', 'lgbm', 'catboost']:
-        return np.asarray(model.predict(X_test))
+def predict_model(model, X_test, model_type='mlp'):
+    if model_type not in ['mlp', 'resnet1d']:
+        raise ValueError(f'Unsupported model_type: {model_type}. Final pipeline supports only mlp and resnet1d.')
 
-    if model_type in ['mlp', 'lstm', 'cnn1d', 'resnet1d', 'transformer']:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        model = model.to(device)
-        model.eval()
-        if model_type == 'mlp':
-            X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
-            test_dataset = TensorDataset(X_test_tensor, torch.zeros(len(X_test)))
-        else:
-            X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
-            test_dataset = TensorDataset(X_test_tensor, torch.zeros(len(X_test)))
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
+    model.eval()
+    if model_type == 'mlp':
+        X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
+        test_dataset = TensorDataset(X_test_tensor, torch.zeros(len(X_test)))
+    else:
+        X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
+        test_dataset = TensorDataset(X_test_tensor, torch.zeros(len(X_test)))
 
-        test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
-        y_pred = []
-        with torch.no_grad():
-            for X_batch, y_batch in test_loader:
-                X_batch = X_batch.to(device)
-                y_batch = y_batch.to(device)
-                preds = model(X_batch)
-                y_pred.extend(np.atleast_1d(np.maximum(preds.squeeze().cpu().numpy(), 0)))
+    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+    y_pred = []
+    with torch.no_grad():
+        for X_batch, y_batch in test_loader:
+            X_batch = X_batch.to(device)
+            y_batch = y_batch.to(device)
+            preds = model(X_batch)
+            y_pred.extend(np.atleast_1d(np.maximum(preds.squeeze().cpu().numpy(), 0)))
 
-        y_pred = np.asarray(y_pred, dtype=float)
-        if getattr(model, 'target_transform', 'none') == 'log1p':
-            y_pred = np.expm1(np.clip(y_pred, a_min=0, a_max=LOG1P_PRED_MAX))
+    y_pred = np.asarray(y_pred, dtype=float)
+    if getattr(model, 'target_transform', 'none') == 'log1p':
+        y_pred = np.expm1(np.clip(y_pred, a_min=0, a_max=LOG1P_PRED_MAX))
 
-        return y_pred
-
-    raise ValueError(f'Unsupported model_type: {model_type}')
+    return y_pred
 
 
-def evaluate_regression_metrics(model, X_test, y_test, model_type='xgb'):
+def evaluate_regression_metrics(model, X_test, y_test, model_type='mlp'):
     y_true = np.asarray(y_test, dtype=float)
     y_pred = predict_model(model, X_test, model_type=model_type)
 
@@ -84,28 +80,14 @@ def evaluate_regression_metrics(model, X_test, y_test, model_type='xgb'):
 
     return metrics
 
-def evaluate_model(model, X_test, y_test, model_type='xgb'):
+def evaluate_model(model, X_test, y_test, model_type='mlp'):
     y_pred = predict_model(model, X_test, model_type=model_type)
     return rmsle(y_test, y_pred)
 
 def load_model(model_type, path):
-    if model_type in ['xgb', 'linear', 'rf', 'lgbm', 'catboost']:
-        return joblib.load(path)
-    elif model_type == 'mlp':
+    if model_type == 'mlp':
         from src.models.models_training import MLPModel
         model = MLPModel(input_size=14, hidden_size=64, output_size=1)
-        model.load_state_dict(torch.load(path))
-        model.target_transform = 'log1p'
-        return model
-    elif model_type == 'lstm':
-        from src.models.models_training import OptimizedLSTMModel
-        model = OptimizedLSTMModel(input_size=14, hidden_size=64, num_layers=2, output_size=1)
-        model.load_state_dict(torch.load(path))
-        model.target_transform = 'log1p'
-        return model
-    elif model_type == 'cnn1d':
-        from src.models.models_training import CNN1DModel
-        model = CNN1DModel(input_size=14, sequence_length=7, output_size=1)
         model.load_state_dict(torch.load(path))
         model.target_transform = 'log1p'
         return model
@@ -115,12 +97,7 @@ def load_model(model_type, path):
         model.load_state_dict(torch.load(path))
         model.target_transform = 'log1p'
         return model
-    elif model_type == 'transformer':
-        from src.models.models_training import TimeSeriesTransformerModel
-        model = TimeSeriesTransformerModel(input_size=14, d_model=64, nhead=4, num_layers=2, output_size=1)
-        model.load_state_dict(torch.load(path))
-        model.target_transform = 'log1p'
-        return model
+    raise ValueError(f'Unsupported model_type: {model_type}. Final pipeline supports only mlp and resnet1d.')
 
 def save_results(results, filename='results.csv'):
     df = pd.DataFrame(results)

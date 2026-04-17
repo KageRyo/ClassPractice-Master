@@ -3,16 +3,8 @@ from pydantic import BaseModel
 
 
 class ModelTypeSchema(Enum):
-    LINEAR = "linear"
-    RF = "rf"
-    XGB = "xgb"
-    LGBM = "lgbm"
-    CATBOOST = "catboost"
     MLP = "mlp"
-    LSTM = "lstm"
-    CNN1D = "cnn1d"
     RESNET1D = "resnet1d"
-    TRANSFORMER = "transformer"
 
 
 class OverfittingFlagSchema(Enum):
