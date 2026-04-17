@@ -250,11 +250,8 @@ def train_mlp(
     save_path='models/mlp_model.pth',
     X_val=None,
     y_val=None,
-    patience=12,
     min_delta=1e-4,
     target_transform='none',
-    min_epochs_before_stop=0,
-    early_stopping_enabled=True,
     lr=1e-3,
     peak_weight=1.0,
     peak_quantile=0.8,
@@ -291,7 +288,6 @@ def train_mlp(
 
     best_state = None
     best_score = float('inf')
-    stale_epochs = 0
 
     for epoch in range(num_epochs):
         model.train()
@@ -332,9 +328,6 @@ def train_mlp(
         if monitor_loss + min_delta < best_score:
             best_score = monitor_loss
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
-            stale_epochs = 0
-        else:
-            stale_epochs += 1
 
         if progress_callback and ((epoch + 1) == 1 or (epoch + 1) == num_epochs or (epoch + 1) % max(log_interval, 1) == 0):
             lr = optimizer.param_groups[0]['lr']
@@ -345,16 +338,6 @@ def train_mlp(
                     f"MLP Epoch {epoch + 1}/{num_epochs} - Train MSE Loss: {avg_loss:.6f} "
                     f"- Val MSE Loss: {val_loss:.6f} - LR: {lr:.6e}"
                 )
-
-        if (
-            early_stopping_enabled
-            and val_loader is not None
-            and (epoch + 1) >= max(min_epochs_before_stop, 1)
-            and stale_epochs >= patience
-        ):
-            if progress_callback:
-                progress_callback(f"MLP Early stopping at epoch {epoch + 1} (best monitor loss={best_score:.6f})")
-            break
 
     if best_state is not None:
         model.load_state_dict(best_state)
@@ -376,11 +359,8 @@ def train_lstm(
     save_path='models/lstm_model.pth',
     X_val_seq=None,
     y_val_seq=None,
-    patience=12,
     min_delta=1e-4,
     target_transform='none',
-    min_epochs_before_stop=0,
-    early_stopping_enabled=True,
 ):
     return train_optimized_lstm(
         X_train_seq=X_train_seq,
@@ -394,11 +374,8 @@ def train_lstm(
         save_path=save_path,
         X_val_seq=X_val_seq,
         y_val_seq=y_val_seq,
-        patience=patience,
         min_delta=min_delta,
         target_transform=target_transform,
-        min_epochs_before_stop=min_epochs_before_stop,
-        early_stopping_enabled=early_stopping_enabled,
     )
 
 
@@ -415,11 +392,8 @@ def _train_sequence_regressor(
     weight_decay=1e-4,
     X_val_seq=None,
     y_val_seq=None,
-    patience=12,
     min_delta=1e-4,
     target_transform='none',
-    min_epochs_before_stop=0,
-    early_stopping_enabled=True,
     peak_weight=1.0,
     peak_quantile=0.8,
 ):
@@ -454,7 +428,6 @@ def _train_sequence_regressor(
 
     best_state = None
     best_score = float('inf')
-    stale_epochs = 0
 
     for epoch in range(num_epochs):
         model.train()
@@ -495,9 +468,6 @@ def _train_sequence_regressor(
         if monitor_loss + min_delta < best_score:
             best_score = monitor_loss
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
-            stale_epochs = 0
-        else:
-            stale_epochs += 1
 
         if progress_callback and ((epoch + 1) == 1 or (epoch + 1) == num_epochs or (epoch + 1) % max(log_interval, 1) == 0):
             lr = optimizer.param_groups[0]['lr']
@@ -510,16 +480,6 @@ def _train_sequence_regressor(
                     f"{model_name} Epoch {epoch + 1}/{num_epochs} - Train MSE Loss: {avg_loss:.6f} "
                     f"- Val MSE Loss: {val_loss:.6f} - LR: {lr:.6e}"
                 )
-
-        if (
-            early_stopping_enabled
-            and val_loader is not None
-            and (epoch + 1) >= max(min_epochs_before_stop, 1)
-            and stale_epochs >= patience
-        ):
-            if progress_callback:
-                progress_callback(f"{model_name} Early stopping at epoch {epoch + 1} (best monitor loss={best_score:.6f})")
-            break
 
     if best_state is not None:
         model.load_state_dict(best_state)
@@ -542,11 +502,8 @@ def train_optimized_lstm(
     save_path='models/lstm_model.pth',
     X_val_seq=None,
     y_val_seq=None,
-    patience=12,
     min_delta=1e-4,
     target_transform='none',
-    min_epochs_before_stop=0,
-    early_stopping_enabled=True,
     peak_weight=1.0,
     peak_quantile=0.8,
 ):
@@ -570,11 +527,8 @@ def train_optimized_lstm(
         weight_decay=1e-4,
         X_val_seq=X_val_seq,
         y_val_seq=y_val_seq,
-        patience=patience,
         min_delta=min_delta,
         target_transform=target_transform,
-        min_epochs_before_stop=min_epochs_before_stop,
-        early_stopping_enabled=early_stopping_enabled,
         peak_weight=peak_weight,
         peak_quantile=peak_quantile,
     )
@@ -591,11 +545,8 @@ def train_cnn1d(
     save_path='models/cnn1d_model.pth',
     X_val_seq=None,
     y_val_seq=None,
-    patience=12,
     min_delta=1e-4,
     target_transform='none',
-    min_epochs_before_stop=0,
-    early_stopping_enabled=True,
     peak_weight=1.0,
     peak_quantile=0.8,
 ):
@@ -618,11 +569,8 @@ def train_cnn1d(
         weight_decay=1e-4,
         X_val_seq=X_val_seq,
         y_val_seq=y_val_seq,
-        patience=patience,
         min_delta=min_delta,
         target_transform=target_transform,
-        min_epochs_before_stop=min_epochs_before_stop,
-        early_stopping_enabled=early_stopping_enabled,
         peak_weight=peak_weight,
         peak_quantile=peak_quantile,
     )
@@ -638,11 +586,8 @@ def train_transformer(
     save_path='models/transformer_model.pth',
     X_val_seq=None,
     y_val_seq=None,
-    patience=12,
     min_delta=1e-4,
     target_transform='none',
-    min_epochs_before_stop=0,
-    early_stopping_enabled=True,
     peak_weight=1.0,
     peak_quantile=0.8,
 ):
@@ -667,11 +612,8 @@ def train_transformer(
         weight_decay=1e-4,
         X_val_seq=X_val_seq,
         y_val_seq=y_val_seq,
-        patience=patience,
         min_delta=min_delta,
         target_transform=target_transform,
-        min_epochs_before_stop=min_epochs_before_stop,
-        early_stopping_enabled=early_stopping_enabled,
         peak_weight=peak_weight,
         peak_quantile=peak_quantile,
     )
@@ -687,11 +629,8 @@ def train_resnet1d(
     save_path='models/resnet1d_model.pth',
     X_val_seq=None,
     y_val_seq=None,
-    patience=12,
     min_delta=1e-4,
     target_transform='none',
-    min_epochs_before_stop=0,
-    early_stopping_enabled=True,
     lr=3e-4,
     peak_weight=1.0,
     peak_quantile=0.8,
@@ -714,11 +653,8 @@ def train_resnet1d(
         weight_decay=1e-4,
         X_val_seq=X_val_seq,
         y_val_seq=y_val_seq,
-        patience=patience,
         min_delta=min_delta,
         target_transform=target_transform,
-        min_epochs_before_stop=min_epochs_before_stop,
-        early_stopping_enabled=early_stopping_enabled,
         peak_weight=peak_weight,
         peak_quantile=peak_quantile,
     )
