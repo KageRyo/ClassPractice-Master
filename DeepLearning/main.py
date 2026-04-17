@@ -57,11 +57,13 @@ def parse_args():
     parser.add_argument('--val-start-date', type=str, default='2016-10-01', help='Validation split start date within training years')
     parser.add_argument('--target-transform', type=str, default='log1p', choices=['none', 'log1p'], help='Target transform used for neural models')
     parser.add_argument('--mlp-lr', type=float, default=1e-3, help='Learning rate for MLP')
-    parser.add_argument('--resnet-lr', type=float, default=3e-4, help='Learning rate for ResNet1D')
+    parser.add_argument('--resnet-lr', type=float, default=2e-4, help='Learning rate for ResNet1D')
     parser.add_argument('--peak-weight', type=float, default=1.0, help='Sample weight multiplier for peak-demand targets in NN loss')
     parser.add_argument('--peak-quantile', type=float, default=0.8, help='Quantile threshold to define peak-demand targets')
     parser.add_argument('--overfit-gap-threshold', type=float, default=0.08, help='Threshold of (Test_RMSLE - Train_RMSLE) to flag overfitting')
-    parser.add_argument('--skip-plot', action='store_true', help='Disable matplotlib plotting')
+    parser.add_argument('--skip-plot', dest='skip_plot', action='store_true', help='Disable matplotlib plotting (default)')
+    parser.add_argument('--show-plot', dest='skip_plot', action='store_false', help='Enable matplotlib plotting')
+    parser.set_defaults(skip_plot=True)
     return parser.parse_args()
 
 
