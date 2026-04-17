@@ -14,6 +14,16 @@ pip install -r requirements.txt
 
 ## 2) 一次跑完整最終版本
 
+最簡單：
+
+```bash
+python main.py
+```
+
+`python main.py` 現在預設即對齊最終建議設定（`mlp,resnet1d`、100 epochs、`sequence_length=14`、`mlp_lr=0.001`、`resnet_lr=0.0002`、`target_transform=log1p`、`val_start_date=2016-10-01`、預設不繪圖）。
+
+等價完整指令：
+
 ```bash
 python main.py \
   --models mlp,resnet1d \
@@ -24,7 +34,6 @@ python main.py \
   --resnet-lr 0.0002 \
   --target-transform log1p \
   --val-start-date 2016-10-01 \
-  --skip-plot \
   --nn-log-interval 5
 ```
 

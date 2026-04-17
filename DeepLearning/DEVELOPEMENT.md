@@ -5,6 +5,13 @@
 - 主指標：RMSLE
 - 測試評分：排除 `visitors = 0`
 - 報告輸出：使用 `Train_RMSLE` / `Test_RMSLE`
+- 本專案中 cost function 與 loss function 視為同義；訓練時皆以 `MSELoss` 優化，評估時以 `RMSLE` 作為主要比較指標
+
+## 0.1) 資料特性摘要
+
+- visitors 分布呈長尾，且大量樣本為 `0`（店休日）
+- 高流量尖峰樣本比例較低，模型容易偏向學到一般日常流量
+- 因題目評分重點與營運語意，測試時排除 `visitors=0` 可避免 closed days 影響指標解讀
 
 ## 1) 調校策略總覽
 
@@ -47,7 +54,7 @@
 
 1. ReLU 輸出層在此任務曾導致偏零預測，改 Softplus 後穩定性更好。
 2. lag/rolling 對 RMSLE 與泛化有明顯幫助。
-3. ResNet1D 對 learning rate 較敏感，`3e-4` 比 `1e-3` 更穩。
+3. ResNet1D 對 learning rate 較敏感，`2e-4` 在目前最終配置下較穩定。
 4. 某些設定會出現 RMSLE 進步但 R2 一般，代表尾部樣本誤差仍需改善。
 
 ## 4) 目前實驗結論（截至 2026-04-16）
@@ -61,13 +68,15 @@
 ### 5.1 主要比較
 
 ```bash
-python main.py --models mlp,resnet1d --skip-plot --target-transform log1p
+python main.py
 ```
+
+`python main.py` 預設即對齊最終建議設定（`mlp,resnet1d`、100 epochs、`sequence_length=14`、`target_transform=log1p`、`resnet_lr=0.0002`、預設不繪圖）。
 
 ### 5.2 正式交付執行（固定跑滿 epoch）
 
 ```bash
-python main.py --models mlp,resnet1d --mlp-epochs 100 --resnet-epochs 100 --sequence-length 14 --mlp-lr 0.001 --resnet-lr 0.0002 --target-transform log1p --val-start-date 2016-10-01 --skip-plot --nn-log-interval 5
+python main.py --models mlp,resnet1d --mlp-epochs 100 --resnet-epochs 100 --sequence-length 14 --mlp-lr 0.001 --resnet-lr 0.0002 --target-transform log1p --val-start-date 2016-10-01 --nn-log-interval 5
 ```
 
 ## 6) 里程碑（Timeline）

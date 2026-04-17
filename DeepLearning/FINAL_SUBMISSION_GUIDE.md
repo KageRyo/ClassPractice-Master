@@ -13,7 +13,6 @@ python main.py \
   --resnet-lr 0.0002 \
   --target-transform log1p \
   --val-start-date 2016-10-01 \
-  --skip-plot \
   --nn-log-interval 5
 ```
 
