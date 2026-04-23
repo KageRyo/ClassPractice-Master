@@ -27,6 +27,7 @@ class TrainingResultSchema(BaseModel):
     Train_MSE: float
     Train_RMSE: float
     Train_MAE: float
+    Train_Accuracy: float
     Train_R2: float
     Train_MAPE: float
     Train_MSPE: float
@@ -36,6 +37,7 @@ class TrainingResultSchema(BaseModel):
     Test_MSE: float
     Test_RMSE: float
     Test_MAE: float
+    Test_Accuracy: float
     Test_R2: float
     Test_MAPE: float
     Test_MSPE: float

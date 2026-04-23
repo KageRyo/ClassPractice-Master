@@ -63,6 +63,7 @@ def evaluate_regression_metrics(model, X_test, y_test, model_type='mlp'):
         'MSE': mse,
         'RMSE': rmse,
         'MAE': mae,
+        'Accuracy': float(np.mean(np.rint(np.maximum(y_pred, 0)) == np.rint(np.maximum(y_true, 0))) * 100.0),
         'R2': float(r2_score(y_true, y_pred)),
         'MAPE': mape,
         'MSPE': mspe,

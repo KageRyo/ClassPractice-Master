@@ -78,93 +78,118 @@ Files are prefixed with `air_` or `hpg_` to indicate source. Each restaurant has
 ## Submission
 Submit your model code and fill in the following information in your report:
 
-Model Information (最終選擇模型：ResNet1D):
-- Model name: ResNet1D
-- Number of layers: 8
-- Number of units in each layer: Stem(Conv64) + ResidualBlocks(64,128,128) + GAP + FC(1)
-- Activation functions used: ReLU + residual skip connections + Softplus output
-- Loss function (ResNet1D 訓練):
-    - 平均平方誤差（Mean Squared Error, MSE）
-    - L = (1/N) * sum_{i=1..N} (y_i - y_hat_i)^2
-- Cost function (ResNet1D 優化目標):
-    - 本專案中 cost 與 loss 同義（每個 epoch 的平均 MSE）
-    - J(theta) = (1/B) * sum_{b=1..B} L_b
-- Evaluation metric required by exam:
+Evaluation metrics used in this project (three separate metrics):
+- Accuracy (%): exact-match rate after rounding to integer visitors
+    - Accuracy = (1/N) * sum_{i=1..N} I(round(max(y_hat_i,0)) = round(max(y_i,0))) * 100
+- R2 (coefficient of determination):
+    - R2 = 1 - [sum_{i=1..N}(y_i - y_hat_i)^2] / [sum_{i=1..N}(y_i - y_bar)^2]
+- RMSLE (official exam metric):
     - RMSLE = sqrt((1/N) * sum_{i=1..N} (log(1 + y_i) - log(1 + y_hat_i))^2)
-- Training epochs: 100
-- Training accuracy: 63.36%（以 Train R2 表示）
-- Testing accuracy: 0.00%（以 Test R2 百分比下限 0 表示）
-- Optimization techniques employed:
-        1. train-only scaling（只用 2016 訓練資料 fit scaler）
-        2. 完整時間軸補齊（per-store reindex）與店休日 visitors 補 0
-        3. visitors lag/rolling 特徵工程（lag_1/7/14, roll_mean_7/std_7）
-        4. AdamW + ReduceLROnPlateau + Softplus output + log1p target transform
-        5. validation split 監控訓練穩定性，固定跑滿 100 epochs
 
-Model Information (基準比較模型：MLP):
+Model Information (基準比較模型: MLP)
 - Model name: MLP
 - Number of layers: 2
 - Number of units in each layer: input_dim -> 64 -> 1
 - Activation functions used: ReLU (hidden) + Softplus output
-- Loss function (MLP 訓練):
-    - 平均平方誤差（Mean Squared Error, MSE）
+- Loss / Cost function (training objective):
+    - Mean Squared Error (MSE)
     - L = (1/N) * sum_{i=1..N} (y_i - y_hat_i)^2
-- Cost function (MLP 優化目標):
-    - 本專案中 cost 與 loss 同義（每個 epoch 的平均 MSE）
     - J(theta) = (1/B) * sum_{b=1..B} L_b
-- Evaluation metric required by exam:
-    - RMSLE = sqrt((1/N) * sum_{i=1..N} (log(1 + y_i) - log(1 + y_hat_i))^2)
+- Training epochs: 100
 
-Difference in accuracies after each optimization technique applied:
-1) Optimization technique name: 前處理管線重構（reindex + train-only scaling）
-    - Before optimization: Training/Testing Accuracies = 不適用 / 不適用（當時以 RMSLE 為主）
-    - After optimization: Training/Testing Accuracies = 不適用 / 不適用（當前仍以 RMSLE 為主）
-    - Any other changes:
-        - 將資料補成每店每日連續時間軸，避免時間斷點
-        - 類別映射與標準化僅用訓練資料建立，降低 leakage 風險
-        - 測試評估排除 visitors=0，與題目 scoring 規則一致
+Model Information (最終選擇模型: ResNet1D)
+- Model name: ResNet1D
+- Number of layers: 8
+- Number of units in each layer: Stem(Conv64) + ResidualBlocks(64,128,128) + GAP + FC(1)
+- Activation functions used: ReLU + residual skip connections + Softplus output
+- Loss / Cost function (training objective):
+    - Mean Squared Error (MSE)
+    - L = (1/N) * sum_{i=1..N} (y_i - y_hat_i)^2
+    - J(theta) = (1/B) * sum_{b=1..B} L_b
+- Training epochs: 100
 
-2) Optimization technique name: 特徵工程升級（lag/rolling）
-    - Before optimization: Training/Testing Accuracies = 不適用 / 不適用（RMSLE 流程）
-    - After optimization: Training/Testing Accuracies = 不適用 / 不適用（RMSLE 流程）
-    - Any other changes:
-        - 新增 visitors_lag_1/7/14
-        - 新增 visitors_roll_mean_7 / visitors_roll_std_7（皆採用 t-1 以前資訊）
-        - 特徵維度由 9 增加到 14
-
-3) Optimization technique name: 訓練穩定化與最終模型篩選（MLP vs ResNet1D）
-    - Before optimization: Training/Testing Accuracies = 57.81% / 57.90%（MLP 基準；RMSLE=0.578145 / 0.578952）
-    - After optimization: Training/Testing Accuracies = 63.36% / 0.00%（ResNet1D 最終；RMSLE=0.558909 / 0.560029）
-    - Any other changes:
-        - 優化器改 AdamW，加入 ReduceLROnPlateau
-        - 輸出層使用 Softplus，target transform 採 log1p
-        - 最終選擇 ResNet1D 作為交付模型
-        - Overfit gap = 0.001120，Overfitting Risk = No
-
-Training / Testing summary (locked final run):
-- MLP:
-    - Train RMSLE: 0.578145
-    - Test RMSLE: 0.578952
+Training / Testing summary (latest regenerated run from results.csv and best_model_summary.md):
+- MLP (baseline)
+    - Train Accuracy: 37.85%
+    - Test Accuracy: 5.49%
     - Train R2: 0.587871
     - Test R2: 0.364594
-- ResNet1D (Best):
+    - Train RMSLE: 0.578145
+    - Test RMSLE: 0.578952
+    - Train RMSE: 10.484785
+    - Test RMSE: 13.593495
+    - Train MAE: 5.363681
+    - Test MAE: 8.150771
+
+- ResNet1D (final selected model)
+    - Train Accuracy: 38.08%
+    - Test Accuracy: 5.87%
+    - Train R2: 0.633555
+    - Test R2: -0.973978
     - Train RMSLE: 0.558909
     - Test RMSLE: 0.560029
     - Train RMSE: 9.927783
     - Test RMSE: 23.959431
     - Train MAE: 5.131245
     - Test MAE: 7.896169
-    - Train R2: 0.633555
-    - Test R2: -0.973978
     - Test Peak Recall: 0.446825
-    - Overfit Gap: 0.001120 (No)
+    - Overfit Gap (Test-Train RMSLE): 0.001120 (Risk: No)
+
+Difference in accuracies / metrics after each optimization technique applied:
+1) Optimization technique name: 前處理管線重構（reindex + train-only scaling）
+    - Before optimization (historical pipeline): Accuracy and generalization were unstable due to discontinuous per-store timelines and potential preprocessing leakage.
+    - After optimization: model behavior became stable and reproducible under fixed data semantics.
+    - Any other changes:
+        - per-store reindex + 店休日 visitors 補 0
+        - 類別 mapping 與標準化只用訓練資料建立（train-only）
+        - 測試評估排除 visitors=0（符合題目 scoring 規則）
+
+2) Optimization technique name: 特徵工程升級（lag/rolling）
+    - Before optimization: features were mainly static/calendar features.
+    - After optimization: temporal dependency modeling improved with lag/rolling features.
+    - Any other changes:
+        - 新增 visitors_lag_1 / visitors_lag_7 / visitors_lag_14
+        - 新增 visitors_roll_mean_7 / visitors_roll_std_7
+        - 全部以 shift(1) 實作，避免使用當日資訊造成 leakage
+        - 特徵維度由 9 增加到 14
+
+3) Optimization technique name: 訓練穩定化與最終模型篩選（MLP vs ResNet1D）
+    - Before optimization (MLP baseline):
+        - Train Accuracy / Test Accuracy = 37.85% / 5.49%
+        - Train R2 / Test R2 = 0.587871 / 0.364594
+        - Train RMSLE / Test RMSLE = 0.578145 / 0.578952
+    - After optimization (ResNet1D final):
+        - Train Accuracy / Test Accuracy = 38.08% / 5.87%
+        - Train R2 / Test R2 = 0.633555 / -0.973978
+        - Train RMSLE / Test RMSLE = 0.558909 / 0.560029
+    - Any other changes:
+        - 優化器改 AdamW，加入 ReduceLROnPlateau
+        - target transform 採 log1p，推論端以 expm1 還原
+        - 輸出層使用 Softplus，確保輸出非負
+        - 固定 100 epochs，關閉 early stopping
 
 Anything special about your model:
-本專案的重點不是盲目加深模型，而是把資料流程、評估規則與模型學習空間對齊：
-1. 測試評分排除 visitors=0，符合題目定義。
-2. 前處理先確保時間軸與缺值語意正確，再進入模型比較。
-3. 使用 log1p/expm1 對齊 RMSLE 的誤差空間。
-4. 最終將流程收斂到 mlp,resnet1d 兩模型，提升可重現性與交付清晰度。
+本專案的重點不是盲目加深模型，而是讓資料流程、評估規則與模型學習空間完全對齊：
+1. 資料前處理管線（對齊 preprocessing.py）
+    - per-store reindex + 店休日補 0
+    - leakage-safe lag_1/7/14 + roll_mean_7/std_7（皆採 shift(1)）
+    - train-only StandardScaler + train-only 類別 mapping
+2. 模型架構細節（對齊 models_training.py）
+    - ResNet1D: Stem(Conv1d 64) + 3 個 ResidualBlock1D（含 skip connection）+ AdaptiveAvgPool1d + Softplus
+    - MLP: input_dim -> 64 -> 1（baseline）
+    - peak-weighted MSE（peak_quantile=0.8）
+3. 訓練策略（對齊 main.py 與 training log）
+    - AdamW + ReduceLROnPlateau
+    - log1p target transform + expm1 inverse
+    - 固定 100 epochs，無 early stopping
+    - validation split（2016-10-01 之後）
+4. 為什麼最終選擇 ResNet1D
+    - RMSLE 優於 MLP（Train: 0.5589 vs 0.5781；Test: 0.5600 vs 0.5790）
+    - Overfit Gap 僅 0.001120（Risk: No）
+    - Test Peak Recall: 0.446825
+5. 與題目規則嚴格對齊
+    - 測試集 visitors=0 完全排除後再評估
+    - RMSLE 作為主指標，同時補充 Accuracy、R2、RMSE、MAE 等輔助指標
 
 Process timeline (what was done step-by-step):
 1. 修正資料管線（日期處理、跨系統店家映射、預約聚合、reindex 補日、缺值填補）。

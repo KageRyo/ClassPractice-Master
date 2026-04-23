@@ -109,6 +109,8 @@ def write_exam_summary(results_df, output_path='best_model_summary.md'):
         f"Test RMSE: {best_row['Test_RMSE']:.6f}",
         f"Train MAE: {best_row['Train_MAE']:.6f}",
         f"Test MAE: {best_row['Test_MAE']:.6f}",
+        f"Train Accuracy (%): {best_row['Train_Accuracy']:.2f}",
+        f"Test Accuracy (%): {best_row['Test_Accuracy']:.2f}",
         f"Train R2: {best_row['Train_R2']:.6f}",
         f"Test R2: {best_row['Test_R2']:.6f}",
         f"Test Peak Recall: {best_row['Test_Peak_Recall']:.6f}",
@@ -122,10 +124,12 @@ def write_exam_summary(results_df, output_path='best_model_summary.md'):
         f"- Loss function: {best_row['Loss_Function']}",
         f"- Cost function: {best_row['Cost_Function']}",
         f"- Training epochs: {best_row['Epochs']}",
+        f"- Training Accuracy (%): {best_row['Train_Accuracy']:.2f}",
+        f"- Testing Accuracy (%): {best_row['Test_Accuracy']:.2f}",
+        f"- Training R2: {best_row['Train_R2']:.6f}",
+        f"- Testing R2: {best_row['Test_R2']:.6f}",
         f"- Training RMSLE: {best_row['Train_RMSLE']:.6f}",
         f"- Testing RMSLE: {best_row['Test_RMSLE']:.6f}",
-        f"- Training R2 (%): {max(0.0, best_row['Train_R2']) * 100:.2f}",
-        f"- Testing R2 (%): {max(0.0, best_row['Test_R2']) * 100:.2f}",
         f"- Testing Peak Recall: {best_row['Test_Peak_Recall']:.6f}",
         '',
         'Note: This project uses RMSLE as required. If your report requires % accuracy, clarify conversion method.',
@@ -365,13 +369,17 @@ for model_type in model_types_to_train:
             test_metrics = evaluate_regression_metrics(model, X_test_seq_open, y_test_seq_open, model_name)
         else:
             raise ValueError(f'Unsupported model for final delivery pipeline: {model_name}')
+        train_accuracy = float(train_metrics['Accuracy'])
+        test_accuracy = float(test_metrics['Accuracy'])
         logger.info(
             f"{model_name} Train | RMSLE={train_metrics['RMSLE']:.6f} RMSE={train_metrics['RMSE']:.6f} "
-            f"MAE={train_metrics['MAE']:.6f} R2={train_metrics['R2']:.6f} PeakRecall={train_metrics['Peak_Recall']:.6f}"
+            f"MAE={train_metrics['MAE']:.6f} Accuracy={train_accuracy:.2f}% R2={train_metrics['R2']:.6f} "
+            f"PeakRecall={train_metrics['Peak_Recall']:.6f}"
         )
         logger.info(
             f"{model_name} Test  | RMSLE={test_metrics['RMSLE']:.6f} RMSE={test_metrics['RMSE']:.6f} "
-            f"MAE={test_metrics['MAE']:.6f} R2={test_metrics['R2']:.6f} PeakRecall={test_metrics['Peak_Recall']:.6f}"
+            f"MAE={test_metrics['MAE']:.6f} Accuracy={test_accuracy:.2f}% R2={test_metrics['R2']:.6f} "
+            f"PeakRecall={test_metrics['Peak_Recall']:.6f}"
         )
         elapsed = time.perf_counter() - model_start
         logger.info(f'{model_name} 訓練耗時: {elapsed:.2f}s')
@@ -384,6 +392,8 @@ for model_type in model_types_to_train:
             'Model': model_name,
             **add_prefix(train_metrics, 'Train'),
             **add_prefix(test_metrics, 'Test'),
+            'Train_Accuracy': train_accuracy,
+            'Test_Accuracy': test_accuracy,
             'Overfit_Gap': overfit_gap,
             'Overfitting_Flag': overfit_flag,
             'Train_Time_Seconds': round(elapsed, 2),
